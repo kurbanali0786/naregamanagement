@@ -324,7 +324,7 @@ firebase.auth().onAuthStateChanged(user => {
 --------------------------------------------------------------- */
 function initStorage(uid){
   try{
-    dbRef = firebase.database().ref("users/" + uid + "/labour_jobcard_data");
+    dbRef = firebase.database().ref("user/" + uid + "/labour_jobcard_data");
     firebaseEnabled = true;
 
     dbRef.on("value", snap => {

@@ -322,8 +322,8 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
       </div>
 
       <div class="card">
-        <h3>👷 Labour List <span id="labourCount" style="font-size:12.5px;color:var(--muted);font-weight:400"></span></h3>
-        <button class="btn btn-outline btn-sm acc-btn" data-show="👷 Labour List Dikhayein" data-hide="🙈 Labour List Chhupayein" onclick="toggleAcc('labourListBox', this)">🙈 Labour List Chhupayein</button>
+        <h3>👷 List <span id="labourCount" style="font-size:12.5px;color:var(--muted);font-weight:400"></span></h3>
+        <button class="btn btn-outline btn-sm acc-btn" data-show="👷 List Dikhayein" data-hide="🙈 Labour List Chhupayein" onclick="toggleAcc('labourListBox', this)">🙈 Labour List Chhupayein</button>
         <div class="collapsible acc-item show" id="labourListBox">
         <div class="row mt">
           <input type="text" id="labSearch" class="grow" placeholder="🔍 Search by Name / Jobcard / Aadhar" oninput="renderLabours()">
@@ -375,7 +375,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
           NREGA site ki <b>Mustroll table</b> select karke Copy (Ctrl+C) karein aur neeche Paste (Ctrl+V) kar dein.
           App khud har row se <b>Naam, Jobcard, Kul Din, Payment (कुल नकद भुगतान), Status aur Credited Date</b> nikaal lega —
           ek hi click me <b>Demand + Payment</b> ban jayegi, aur jiska <b>Status/Credited Date</b> bhara hoga wo seedha
-          <b>AC Credit</b> bhi ho jayega. Baaki "Pending" rahenge, jinhe baad me 🏦 AC Credit tab se ek saath Credit kar sakte hain.
+          <b>AC Credit</b> bhi ho jayega. Baaki "Pending" rahenge, jinhe baad me 🏦 tab se ek saath Credit kar sakte hain.
         </div>
         <div class="row">
           <div class="field grow"><label>Demand Date (is date ki demand banegi)</label><input type="date" id="onePasteDate"></div>
@@ -421,7 +421,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
           <button class="btn btn-red btn-sm" onclick="bulkDeleteDemands()">🗑️ Bulk Delete Selected</button>
           <button class="btn btn-gray btn-sm" onclick="manualRefresh('past')">🔄 Refresh</button>
         </div>
-        <p style="font-size:12px;color:var(--muted);margin-top:8px">ℹ️ <b>Credit Status / Credit Date</b> ko bulk me 🏦 <b>AC Credit</b> tab se update karein. <button class="btn btn-blue btn-sm" onclick="switchTab('accredit')">🏦 AC Credit Kholein</button></p>
+        <p style="font-size:12px;color:var(--muted);margin-top:8px">ℹ️ <b>Credit Status / Credit Date</b> ko bulk me 🏦 <b>AC Credit</b> tab se update karein. <button class="btn btn-blue btn-sm" onclick="switchTab('accredit')">🏦 Kholein</button></p>
                 <div class="row mt" style="background:linear-gradient(135deg,var(--green-light),#fff);padding:12px;border-radius:10px;border:1.5px dashed var(--green-mid);align-items:flex-start;flex-wrap:wrap">
           <div class="field grow" style="margin-bottom:0;min-width:200px">
             <label style="font-size:12.5px;color:var(--green);font-weight:700">💬 Bulk Comment — Demand table se select karein, yahan likhein</label>
@@ -444,7 +444,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
     <!-- ==== AC CREDIT TAB ==== -->
     <div id="panel-accredit" class="panel">
       <div class="card">
-        <h3>🏦 AC Credit <span id="acCount" style="font-size:12.5px;color:var(--muted);font-weight:400"></span></h3>
+        <h3>🏦 <span id="acCount" style="font-size:12.5px;color:var(--muted);font-weight:400"></span></h3>
         <div class="row">
           <input type="text" id="acSearch" class="grow" placeholder="🔍 Search by Name / Jobcard" oninput="renderACList()">
           <div class="field grow"><label>Date (Demand Date Filter)</label><input type="date" id="acDate" onchange="renderACList()"></div>
@@ -474,7 +474,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
     <!-- ==== REPORT TAB ==== -->
     <div id="panel-report" class="panel">
       <div class="card no-print">
-        <h3>📊 Report</h3>
+        <h3>📊</h3>
         <div class="row">
           <div class="field grow"><label>Date (khaali chhodo = Sabhi dates)</label><input type="date" id="reportDate"></div>
           <button class="btn btn-green" onclick="generateReport()">📊 Generate</button>
@@ -491,7 +491,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
       </div>
 
       <div id="reportPrintArea" class="card">
-        <h3 id="reportTitle">📊 Report</h3>
+        <h3 id="reportTitle">📊</h3>
         <div class="summary-grid" id="reportSummary"></div>
         <div class="table-wrap mt">
           <table>
@@ -506,7 +506,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
     <!-- ==== NREGA FORM 10 TAB ==== -->
     <div id="panel-nrega" class="panel">
       <div class="card no-print">
-        <h3>📄 NREGA Form 10 <span style="font-size:12px;color:var(--muted);font-weight:400">(sirf Active Labour)</span></h3>
+        <h3>📄 <span style="font-size:12px;color:var(--muted);font-weight:400">(sirf Active Labour)</span></h3>
         <div class="row">
           <input type="text" id="nregaSearch" class="grow" placeholder="🔍 Naam / Jobcard se search karein" oninput="renderNregaSearch()">
         </div>
@@ -551,12 +551,12 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
   </main>
 
   <nav class="tabs">
-    <button class="active" data-tab="dashboard" onclick="switchTab('dashboard')">🏠 Dashboard</button>
-    <button data-tab="labour" onclick="switchTab('labour')">👷 Labour</button>
-    <button data-tab="past" onclick="switchTab('past')">🗂️ Past</button>
-    <button data-tab="accredit" onclick="switchTab('accredit')">🏦 AC Credit</button>
-    <button data-tab="report" onclick="switchTab('report')">📊 Report</button>
-    <button data-tab="nrega" onclick="switchTab('nrega')">📄 NREGA Form 10</button>
+    <button class="active" data-tab="dashboard" onclick="switchTab('dashboard')">🏠</button>
+    <button data-tab="labour" onclick="switchTab('labour')">👷</button>
+    <button data-tab="past" onclick="switchTab('past')">🗂️</button>
+    <button data-tab="accredit" onclick="switchTab('accredit')">🏦</button>
+    <button data-tab="report" onclick="switchTab('report')">📊</button>
+    <button data-tab="nrega" onclick="switchTab('nrega')">📄</button>
   </nav>
 
   

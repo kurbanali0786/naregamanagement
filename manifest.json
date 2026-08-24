@@ -1,13 +1,13 @@
 {
   "name": "Labour Job Card System",
-  "short_name": "Job Card",
-  "description": "NREGA Labour Management — Demand, Payment, AC Credit, Report",
-  "start_url": "./index.html",
-  "scope": "./",
+  "short_name": "Labour Job Card",
+  "description": "NREGA Labour Management System by Kurban Ali",
+  "start_url": "./",
   "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#f4f6f5",
-  "theme_color": "#0f5132",
+  "background_color": "#1a5c2e",
+  "theme_color": "#1a5c2e",
+  "orientation": "portrait-primary",
+  "scope": "./",
   "icons": [
     {
       "src": "icon-192.png",
