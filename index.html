@@ -95,6 +95,17 @@ main{max-width:980px;margin:0 auto;padding:16px 12px 100px}
 /* ---------- TABLE / LIST ---------- */
 .table-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--border)}
 table{width:100%;border-collapse:collapse;font-size:13px;min-width:520px}
+/* Report table — kul-divas/pratidin/kul-bhugtan/credit-date columns content ke
+   hisaab se hi chaudi ho, wrap na ho, center me ho — taaki print/PDF me
+   zyada rows ek page me fit ho sakein */
+.report-table th:nth-child(1), .report-table td:nth-child(1),
+.report-table th:nth-child(4), .report-table td:nth-child(4),
+.report-table th:nth-child(5), .report-table td:nth-child(5),
+.report-table th:nth-child(6), .report-table td:nth-child(6),
+.report-table th:nth-child(7), .report-table td:nth-child(7),
+.report-table th:nth-child(8), .report-table td:nth-child(8){
+  width:1%; white-space:nowrap; text-align:center;
+}
 th,td{padding:10px 10px;border-bottom:1px solid #e8eee9;text-align:left;vertical-align:middle}
 th{background:var(--green-light);color:var(--green);font-size:12.5px;white-space:nowrap;font-weight:700;position:sticky;top:0}
 tbody tr:last-child td{border-bottom:none}
@@ -496,7 +507,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
         <h3 id="reportTitle">📊</h3>
         <div class="summary-grid" id="reportSummary"></div>
         <div class="table-wrap mt">
-          <table>
+          <table class="report-table">
             <thead><tr><th>#</th><th>Name</th><th>Jobcard No.</th><th>Kul Divas</th><th>Pratidin ₹</th><th>Kul Bhugtan ₹</th><th>Status</th><th>Credit</th><th>Comment</th></tr></thead>
             <tbody id="reportTableBody"></tbody>
           </table>
@@ -608,7 +619,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   }
 </script>
-<script src="app.js?v=20"></script>
+<script src="app.js?v=21"></script>
 <script>
 /* Agar app.js load hi na ho (404 / internet / purani cache) to Login button "dead" lagta hai —
    user ko saaf message dikhao ki asli problem kya hai */
