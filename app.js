@@ -496,17 +496,25 @@ function renderDashboard(){
   const totalLabour = DATA.labours.length;
   const activeLabour = DATA.labours.filter(l => l.status === "Active").length;
   const totalPayment = DATA.payments.reduce((sum, p) => sum + (p.amount || 0), 0);
-  const creditedCount = DATA.acCredits.filter(a => a.status === "Credited").length;
-  const pendingCount = Math.max(DATA.payments.length - creditedCount, 0);
-  const todayDemand = DATA.demands.filter(d => d.date === todayISO()).length;
+
+  const creditedKeys = new Set(DATA.acCredits.filter(a => a.status === "Credited").map(a => a.date + "|" + a.labourId));
+  let creditedAmount = 0, creditedMateShare = 0, pendingAmount = 0;
+  DATA.payments.forEach(p => {
+    if(creditedKeys.has(p.date + "|" + p.labourId)){
+      creditedAmount += (p.amount || 0);
+      creditedMateShare += (p.mateShare || 0);
+    } else {
+      pendingAmount += (p.amount || 0);
+    }
+  });
 
   box.innerHTML = `
     <div class="sum-card"><div class="v">${totalLabour}</div><div class="l">Total Labour</div></div>
     <div class="sum-card"><div class="v">${activeLabour}</div><div class="l">Active Labour</div></div>
     <div class="sum-card"><div class="v">₹${totalPayment.toFixed(2)}</div><div class="l">Total Payment (Sab Milakar)</div></div>
-    <div class="sum-card"><div class="v">${creditedCount}</div><div class="l">AC Credited</div></div>
-    <div class="sum-card"><div class="v">${pendingCount}</div><div class="l">AC Pending</div></div>
-    <div class="sum-card"><div class="v">${todayDemand}</div><div class="l">Aaj ki Demand</div></div>
+    <div class="sum-card"><div class="v">₹${creditedAmount.toFixed(2)}</div><div class="l">AC Credited (₹)</div></div>
+    <div class="sum-card"><div class="v">₹${pendingAmount.toFixed(2)}</div><div class="l">AC Pending (₹)</div></div>
+    <div class="sum-card"><div class="v">₹${creditedMateShare.toFixed(2)}</div><div class="l">Mate Share (Credited)</div></div>
   `;
 }
 
@@ -2201,16 +2209,17 @@ function getReportRowsData(){
 }
 
 function reportPrintDocHtml(pageRows, dateLabel, pageNum, totalPages, startIndex){
+  const nw = "white-space:nowrap;width:1%"; // content jitni hi chaudi, wrap nahi
   const rows = pageRows.map((r, i) => `
     <tr>
-      <td style="border:1px solid #000;padding:5px;text-align:center">${startIndex + i + 1}</td>
+      <td style="border:1px solid #000;padding:5px;text-align:center;${nw}">${startIndex + i + 1}</td>
       <td style="border:1px solid #000;padding:5px">${escapeHtml(r.name)}</td>
-      <td style="border:1px solid #000;padding:5px">${escapeHtml(r.jobcardNo)}</td>
-      <td style="border:1px solid #000;padding:5px;text-align:center">${escapeHtml(String(r.kulDin))}</td>
-      <td style="border:1px solid #000;padding:5px;text-align:center">${escapeHtml(String(r.pratidin))}</td>
-      <td style="border:1px solid #000;padding:5px;text-align:right">${escapeHtml(r.amount)}</td>
-      <td style="border:1px solid #000;padding:5px;text-align:center">${escapeHtml(r.status)}</td>
-      <td style="border:1px solid #000;padding:5px;text-align:center">${escapeHtml(r.credit)}</td>
+      <td style="border:1px solid #000;padding:5px;${nw}">${escapeHtml(r.jobcardNo)}</td>
+      <td style="border:1px solid #000;padding:5px;text-align:center;${nw}">${escapeHtml(String(r.kulDin))}</td>
+      <td style="border:1px solid #000;padding:5px;text-align:center;${nw}">${escapeHtml(String(r.pratidin))}</td>
+      <td style="border:1px solid #000;padding:5px;text-align:center;${nw}">${escapeHtml(r.amount)}</td>
+      <td style="border:1px solid #000;padding:5px;text-align:center;${nw}">${escapeHtml(r.status)}</td>
+      <td style="border:1px solid #000;padding:5px;text-align:center;${nw}">${escapeHtml(r.credit)}</td>
       <td style="border:1px solid #000;padding:5px">${escapeHtml(r.comment)}</td>
     </tr>`).join("");
   return `
@@ -2219,14 +2228,14 @@ function reportPrintDocHtml(pageRows, dateLabel, pageNum, totalPages, startIndex
       <p style="text-align:center;font-size:10.5px;margin:4px 0 10px">Labour Job Card System — ${fmtDate(todayISO())}${totalPages > 1 ? ` — Page ${pageNum}/${totalPages}` : ""}</p>
       <table style="width:100%;border-collapse:collapse;font-size:10.5px">
         <thead><tr>
-          <th style="border:1px solid #000;padding:5px;background:#f0f0f0;width:24px">#</th>
+          <th style="border:1px solid #000;padding:5px;background:#f0f0f0;${nw}">#</th>
           <th style="border:1px solid #000;padding:5px;background:#f0f0f0">Name</th>
-          <th style="border:1px solid #000;padding:5px;background:#f0f0f0">Jobcard No.</th>
-          <th style="border:1px solid #000;padding:5px;background:#f0f0f0">Kul Divas</th>
-          <th style="border:1px solid #000;padding:5px;background:#f0f0f0">Pratidin ₹</th>
-          <th style="border:1px solid #000;padding:5px;background:#f0f0f0">Kul Bhugtan ₹</th>
-          <th style="border:1px solid #000;padding:5px;background:#f0f0f0">Status</th>
-          <th style="border:1px solid #000;padding:5px;background:#f0f0f0">Credit</th>
+          <th style="border:1px solid #000;padding:5px;background:#f0f0f0;${nw}">Jobcard No.</th>
+          <th style="border:1px solid #000;padding:5px;background:#f0f0f0;${nw}">Kul Divas</th>
+          <th style="border:1px solid #000;padding:5px;background:#f0f0f0;${nw}">Pratidin ₹</th>
+          <th style="border:1px solid #000;padding:5px;background:#f0f0f0;${nw}">Kul Bhugtan ₹</th>
+          <th style="border:1px solid #000;padding:5px;background:#f0f0f0;${nw}">Status</th>
+          <th style="border:1px solid #000;padding:5px;background:#f0f0f0;${nw}">Credit</th>
           <th style="border:1px solid #000;padding:5px;background:#f0f0f0">Comment</th>
         </tr></thead>
         <tbody>${rows}</tbody>
