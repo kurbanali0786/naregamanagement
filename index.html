@@ -73,7 +73,7 @@ header.app-header h1{font-size:17px;letter-spacing:.3px;display:flex;align-items
 /* ---------- TABS ---------- */
 nav.tabs{display:flex;background:#fff;border-top:1px solid var(--border);overflow-x:auto;position:fixed;bottom:0;left:0;right:0;z-index:40;padding:0 6px;scrollbar-width:none}
 nav.tabs::-webkit-scrollbar{display:none}
-nav.tabs button{flex:1;min-width:70px;padding:10px 5px;border:none;background:none;font-size:11.5px;font-weight:600;color:var(--muted);cursor:pointer;border-top:3px solid transparent;border-bottom:none;white-space:nowrap;transition:.18s;font-family:inherit}
+nav.tabs button{flex:1;min-width:56px;padding:11px 5px;border:none;background:none;font-size:23px;line-height:1;font-weight:600;color:var(--muted);cursor:pointer;border-top:3px solid transparent;border-bottom:none;white-space:nowrap;transition:.18s;font-family:inherit}
 nav.tabs button:hover{color:var(--green);background:#f5faf7}
 nav.tabs button.active{color:var(--green);border-top-color:var(--green-mid);border-bottom-color:transparent;background:linear-gradient(0deg,#fff, var(--green-light))}
 
@@ -177,10 +177,12 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
   body.print-labour #labourPrintArea,body.print-labour #labourPrintArea *{visibility:visible}
   body.print-labour #labourPrintArea{position:absolute;left:0;top:0;width:100%;display:block!important}
   .att-in,.rep-comment{border:none;padding:2px;font-size:11px}
+  .rep-comment::placeholder{color:transparent}
   .no-comments th:nth-child(9),.no-comments td:nth-child(9){display:none}
   .no-print{display:none!important}
   table{min-width:0}
   .card,.table-wrap{border:none;box-shadow:none}
+  #reportPrintArea button,#labourPrintArea button{display:none!important}
 }
 </style>
 </head>
@@ -294,12 +296,12 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
       </div>
 
       <div class="card">
-        <h3>📥 Bulk Labour Import (CSV / Excel)</h3>
+        <h3>📥 Bulk Labour Import (CSV / Excel / PDF)</h3>
         <button class="btn btn-outline btn-sm acc-btn" id="btnToggleBulkImport" data-show="👁️ Bulk Import Dikhayein" data-hide="🙈 Bulk Import Chhupayein" onclick="toggleAcc('bulkImportBox', this)">👁️ Bulk Import Dikhayein</button>
         <div class="collapsible acc-item" id="bulkImportBox">
-          <p style="font-size:12.5px;color:var(--muted);margin:10px 0">Format: <b>Jobcard No, Name, Aadhar No, Status</b> — pehli line header honi chahiye. Sirf <b>Jobcard No. aur Name zaroori</b> hain, baaki khaali chhod sakte hain. <b>Excel (.xlsx/.xls) ya CSV</b> dono chalega — koi bhi Font (Hindi/English) ho, sab support hai.</p>
+          <p style="font-size:12.5px;color:var(--muted);margin:10px 0">Format: <b>Jobcard No, Name, Aadhar No, Status</b> — pehli line header honi chahiye. Sirf <b>Jobcard No. aur Name zaroori</b> hain, baaki khaali chhod sakte hain. <b>Excel (.xlsx/.xls), CSV ya PDF</b> teeno chalenge — koi bhi Font (Hindi/English) ho, sab support hai. Agar file me <b>Sr. No. / Serial No.</b> jaisa koi column bhi hai to koi dikkat nahi — wo apne aap ignore ho jaayega, kyunki number app khud lagata hai.</p>
           <div class="row">
-            <input type="file" id="csvImportFile" accept=".csv,.xlsx,.xls" class="grow">
+            <input type="file" id="csvImportFile" accept=".csv,.xlsx,.xls,.pdf" class="grow">
             <button class="btn btn-green btn-sm" onclick="importLabourFile()">📥 Import Karein</button>
             <button class="btn btn-gray btn-sm" onclick="downloadSampleCSV()">📄 Sample File Download</button>
           </div>
@@ -486,7 +488,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
         </div>
         <div class="row mt">
           <button class="btn btn-blue btn-sm" onclick="printReport()">🖨️ Print</button>
-          <button class="btn btn-orange btn-sm" onclick="exportCSV()">⬇️ Export CSV</button>
+          <button class="btn btn-orange btn-sm" onclick="downloadReportPDF()">⬇️ PDF Download</button>
         </div>
       </div>
 
@@ -551,12 +553,12 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
   </main>
 
   <nav class="tabs">
-    <button class="active" data-tab="dashboard" onclick="switchTab('dashboard')">🏠</button>
-    <button data-tab="labour" onclick="switchTab('labour')">👷</button>
-    <button data-tab="past" onclick="switchTab('past')">🗂️</button>
-    <button data-tab="accredit" onclick="switchTab('accredit')">🏦</button>
-    <button data-tab="report" onclick="switchTab('report')">📊</button>
-    <button data-tab="nrega" onclick="switchTab('nrega')">📄</button>
+    <button class="active" data-tab="dashboard" title="Dashboard" onclick="switchTab('dashboard')">🏠</button>
+    <button data-tab="labour" title="Labour" onclick="switchTab('labour')">👷</button>
+    <button data-tab="past" title="Past / Demand" onclick="switchTab('past')">🗂️</button>
+    <button data-tab="accredit" title="AC Credit" onclick="switchTab('accredit')">🏦</button>
+    <button data-tab="report" title="Report" onclick="switchTab('report')">📊</button>
+    <button data-tab="nrega" title="NREGA Form 10" onclick="switchTab('nrega')">📄</button>
   </nav>
 
   
@@ -599,7 +601,14 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="app.js?v=19"></script>
+<!-- pdf.js for Bulk Import (PDF se Naam/Jobcard/Aadhar/Status padhne ke liye) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  if(typeof pdfjsLib !== "undefined"){
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  }
+</script>
+<script src="app.js?v=20"></script>
 <script>
 /* Agar app.js load hi na ho (404 / internet / purani cache) to Login button "dead" lagta hai —
    user ko saaf message dikhao ki asli problem kya hai */

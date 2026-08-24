@@ -723,7 +723,7 @@ function parseCSVLine(line){
 function importLabourFile(){
   const fileInput = $("csvImportFile");
   const file = fileInput.files[0];
-  if(!file){ toast("Pehle CSV ya Excel file select karein", "error"); return; }
+  if(!file){ toast("Pehle CSV, Excel ya PDF file select karein", "error"); return; }
 
   const ext = file.name.split(".").pop().toLowerCase();
 
@@ -756,21 +756,128 @@ function importLabourFile(){
       fileInput.value = "";
     };
     reader.readAsArrayBuffer(file);
+  } else if(ext === "pdf"){
+    if(typeof pdfjsLib === "undefined"){
+      toast("PDF Import library load nahi ho payi — Internet connection check karein", "error");
+      return;
+    }
+    toast("PDF padha ja raha hai...", "info");
+    extractRowsFromPDF(file)
+      .then(rows => {
+        if(!rows.length){
+          toast("PDF me se koi table data nahi mila — ho sakta hai ye scanned/image PDF ho, us case me CSV ya Excel use karein", "error");
+          return;
+        }
+        processLabourImportRows(rows);
+      })
+      .catch(err => {
+        console.error("PDF padhne me error:", err);
+        toast("PDF padhne me dikkat hui — file sahi hai check karein", "error");
+      })
+      .finally(() => { fileInput.value = ""; });
   } else {
-    toast("Sirf .csv, .xlsx ya .xls file select karein", "error");
+    toast("Sirf .csv, .xlsx, .xls ya .pdf file select karein", "error");
   }
+}
+
+/* PDF ki text-layer se row/column table nikalta hai — har text-item ki
+   x/y position ke hisaab se lines (rows) aur columns banaye jaate hain.
+   Sirf text-based PDF ke liye kaam karta hai (scanned/image PDF ke liye nahi). */
+async function extractRowsFromPDF(file){
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const allRows = [];
+
+  for(let p = 1; p <= pdf.numPages; p++){
+    const page = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    const items = content.items
+      .map(it => ({ text: String(it.str || ""), x: it.transform[4], y: it.transform[5] }))
+      .filter(it => it.text.trim().length);
+    if(!items.length) continue;
+
+    // Y ke hisaab se (upar se neeche) sort karke same-line items ek row me group karo
+    items.sort((a, b) => b.y - a.y || a.x - b.x);
+    const lineRows = [];
+    let current = [], lastY = null;
+    const Y_TOL = 4;
+    items.forEach(it => {
+      if(lastY === null || Math.abs(it.y - lastY) <= Y_TOL){
+        current.push(it);
+      } else {
+        lineRows.push(current);
+        current = [it];
+      }
+      lastY = it.y;
+    });
+    if(current.length) lineRows.push(current);
+
+    // Har row ke andar x-gap dekh kar columns banao
+    lineRows.forEach(rowItems => {
+      rowItems.sort((a, b) => a.x - b.x);
+      const cells = [];
+      let cellText = rowItems[0].text;
+      let lastX = rowItems[0].x + rowItems[0].text.length * 4.2;
+      const GAP_THRESHOLD = 9;
+      for(let i = 1; i < rowItems.length; i++){
+        const it = rowItems[i];
+        if(it.x - lastX > GAP_THRESHOLD){
+          cells.push(cellText.trim());
+          cellText = it.text;
+        } else {
+          cellText += (/\s$/.test(cellText) ? "" : " ") + it.text;
+        }
+        lastX = it.x + it.text.length * 4.2;
+      }
+      cells.push(cellText.trim());
+      if(cells.some(c => c)) allRows.push(cells);
+    });
+  }
+  return allRows;
+}
+
+/* Header row ke naam se columns dhoondta hai (Jobcard / Name / Aadhar / Status).
+   Sr.No / Serial No jaisa column jaan-bujhkar IGNORE hota hai — app khud apna
+   number lagata hai, isliye file me chahe koi bhi Sr No column ho, use chhoda jaata hai. */
+function detectImportColumns(headerRow){
+  const norm = s => String(s || "").toLowerCase().replace(/[^a-z]/g, "");
+  let jobcard = -1, name = -1, aadhar = -1, status = -1;
+  (headerRow || []).forEach((cell, idx) => {
+    const h = norm(cell);
+    if(!h) return;
+    if(jobcard === -1 && /jobcard|jobno|jcno|jobcardno/.test(h)) jobcard = idx;
+    else if(name === -1 && /name|naam/.test(h)) name = idx;
+    else if(aadhar === -1 && /aadhar|aadhaar/.test(h)) aadhar = idx;
+    else if(status === -1 && h === "status") status = idx;
+    // "srno" / "slno" / "serialno" / "क्रसं" jaise column yahan match hi nahi karte — automatically skip
+  });
+  return { jobcard, name, aadhar, status };
 }
 
 function processLabourImportRows(rows){
   if(!rows || rows.length < 2){ toast("File khaali hai ya sirf header hai", "error"); return; }
 
+  const header = rows[0] || [];
+  let { jobcard: colJobcard, name: colName, aadhar: colAadhar, status: colStatus } = detectImportColumns(header);
+
+  // Header ke naam se Jobcard + Name mile to wahi columns use karo (Sr.No column
+  // kahin bhi ho, ye tareeqa use khud-b-khud ignore kar deta hai).
+  // Nahi mile to purana fixed-position tareeqa — lekin agar pehla column
+  // Sr.No/Serial jaisa dikhta hai to use bhi skip kar dete hain.
+  if(colJobcard === -1 || colName === -1){
+    const firstHeaderNorm = String(header[0] || "").toLowerCase().replace(/[^a-z]/g, "");
+    const looksLikeSerial = /^(srno|sno|slno|serialno|serialnumber|sr|sl)$/.test(firstHeaderNorm);
+    const base = looksLikeSerial ? 1 : 0;
+    colJobcard = base; colName = base + 1; colAadhar = base + 2; colStatus = base + 3;
+  }
+
   let added = 0, skipped = 0;
   for(let i = 1; i < rows.length; i++){
     const cols = rows[i] || [];
-    const jobcardNo = String(cols[0] ?? "").trim();
-    const name = String(cols[1] ?? "").trim();
-    let aadhar = String(cols[2] ?? "").trim();
-    let status = String(cols[3] ?? "").trim();
+    const jobcardNo = String(cols[colJobcard] ?? "").trim();
+    const name = String(cols[colName] ?? "").trim();
+    let aadhar = colAadhar !== -1 ? String(cols[colAadhar] ?? "").trim() : "";
+    let status = colStatus !== -1 ? String(cols[colStatus] ?? "").trim() : "";
     if(!["Active", "Inactive", "Completed"].includes(status)) status = "Active";
 
     if(!jobcardNo || !name){ skipped++; continue; }
@@ -1720,7 +1827,12 @@ function renderDemands(){
         <td><span class="badge ${(l.status || "").toLowerCase()}">${l.status || "—"}</span></td>
         <td><span class="badge ${creditStatus === "Credited" ? "credited" : creditStatus === "Pending" ? "pending" : ""}">${creditStatus}</span></td>
         <td>${creditDate || "—"}</td>
-        <td><input type="text" class="rep-comment" value="${escapeHtml(d.comment || "")}" placeholder="..." onchange="updateDemandField('${d.id}','comment',this.value)" style="width:90px"></td>
+        <td>
+          <div style="display:flex;gap:4px;align-items:center">
+            <input type="text" class="rep-comment" id="cmt-${d.id}" value="${escapeHtml(d.comment || "")}" placeholder="..." style="width:90px">
+            <button class="btn btn-blue btn-sm" style="padding:5px 8px" onclick="saveComment('${d.id}')" title="Comment Save karein">💾</button>
+          </div>
+        </td>
         <td><button class="btn btn-red btn-sm" onclick="removeDemand('${d.id}')">Delete</button></td>
       </tr>
     `;
@@ -1736,6 +1848,22 @@ function updateDemandField(demandId, field, value){
   if(field === "comment") d[field] = String(value || "");
   else d[field] = (value === "" || isNaN(parseFloat(value))) ? "" : parseFloat(value);
   persist();
+}
+
+// Har row ke comment ke saamne wala 💾 Save button — Demand List (Past tab)
+function saveComment(demandId){
+  const input = $("cmt-" + demandId);
+  if(!input) return;
+  updateDemandField(demandId, "comment", input.value);
+  toast("Comment save ho gaya", "success");
+}
+
+// Har row ke comment ke saamne wala 💾 Save button — Report tab
+function saveReportComment(demandId){
+  const input = $("rcmt-" + demandId);
+  if(!input) return;
+  updateDemandField(demandId, "comment", input.value);
+  toast("Comment save ho gaya", "success");
 }
 
 // Kul Bhugtan (₹) — linked Payment ka amount update hota hai (50/50 Mate/Labour share bhi dobara banta hai)
@@ -2001,7 +2129,12 @@ function generateReport(){
         <td>${p ? "₹" + p.amount : "—"}</td>
         <td><span class="badge ${acStatus === "Credited" ? "credited" : acStatus === "Pending" ? "pending" : ""}">${acStatus}</span></td>
         <td>${creditDate || "—"}</td>
-        <td><input type="text" class="rep-comment" value="${escapeHtml(d.comment || "")}" placeholder="comment..." onchange="updateDemandField('${d.id}','comment',this.value)"></td>
+        <td>
+          <div style="display:flex;gap:4px;align-items:center">
+            <input type="text" class="rep-comment" id="rcmt-${d.id}" value="${escapeHtml(d.comment || "")}" placeholder="...">
+            <button class="btn btn-blue btn-sm" style="padding:5px 8px" onclick="saveReportComment('${d.id}')" title="Comment Save karein">💾</button>
+          </div>
+        </td>
       </tr>
     `);
   });
@@ -2023,14 +2156,18 @@ function printReport(){
   const reportArea = $("reportPrintArea");
   if(!hasComments) reportArea.classList.add("no-comments");
   const st = document.createElement("style");
-  st.textContent = "@page{size:A4 landscape;margin:8mm}";
+  st.textContent = "@page{size:A4 portrait;margin:8mm}";
   document.head.appendChild(st);
   document.body.classList.add("print-report");
   window.print();
   setTimeout(() => { document.body.classList.remove("print-report"); st.remove(); if(!hasComments) reportArea.classList.remove("no-comments"); }, 500);
 }
 
-function exportCSV(){
+/* ================================================================
+   📊 REPORT PDF — Portrait mode, ek page me jitni entry fit ho jaayein
+   (CSV ki jagah seedha PDF download hota hai)
+================================================================ */
+function getReportRowsData(){
   const date = $("reportDate") ? $("reportDate").value : "";
   const onlyCredited = $("reportOnlyCredited") ? $("reportOnlyCredited").checked : false;
 
@@ -2041,34 +2178,104 @@ function exportCSV(){
       return !!(ac && ac.status === "Credited");
     });
   }
-  if(!demandList.length){ toast("Pehle Report Generate karein", "error"); return; }
 
-  let csv = "Name,Jobcard No,Kul Divas,Pratidin,Kul Bhugtan,Status,Credit Date,Comment\n";
-  demandList.forEach(d => {
+  return demandList.map(d => {
     const l = DATA.labours.find(x => x.id === d.labourId) || {};
     const p = DATA.payments.find(x => x.date === d.date && x.labourId === d.labourId);
     const ac = DATA.acCredits.find(x => x.date === d.date && x.labourId === d.labourId);
-    const acStatus = ac ? ac.status : (p ? "Pending" : "-");
+    const acStatus = ac ? ac.status : (p ? "Pending" : "—");
     const creditDate = ac ? fmtDate(ac.creditedDate || ac.date) : "";
-
-    csv += [
-      `"${(l.name || "-").replace(/"/g, '""')}"`,
-      l.jobcardNo || "",
-      d.kulDin ?? "",
-      d.pratidin ?? "",
-      p ? p.amount : "",
-      acStatus,
-      creditDate,
-      `"${(d.comment || "").replace(/"/g, '""')}"`
-    ].join(",") + "\n";
+    return {
+      name: l.name || "—",
+      jobcardNo: l.jobcardNo || "—",
+      kulDin: d.kulDin ?? "",
+      pratidin: d.pratidin ?? "",
+      amount: p ? "₹" + p.amount : "—",
+      status: acStatus,
+      credit: creditDate || "—",
+      // Comment khaali hai to yahan bilkul khaali string hi jaayegi —
+      // koi placeholder/"comment" word print nahi hoga
+      comment: d.comment ? String(d.comment).trim() : ""
+    };
   });
+}
 
-  const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = `Report_${date || "all"}.csv`;
-  link.click();
-  toast("CSV Export ho gaya");
+function reportPrintDocHtml(pageRows, dateLabel, pageNum, totalPages, startIndex){
+  const rows = pageRows.map((r, i) => `
+    <tr>
+      <td style="border:1px solid #000;padding:5px;text-align:center">${startIndex + i + 1}</td>
+      <td style="border:1px solid #000;padding:5px">${escapeHtml(r.name)}</td>
+      <td style="border:1px solid #000;padding:5px">${escapeHtml(r.jobcardNo)}</td>
+      <td style="border:1px solid #000;padding:5px;text-align:center">${escapeHtml(String(r.kulDin))}</td>
+      <td style="border:1px solid #000;padding:5px;text-align:center">${escapeHtml(String(r.pratidin))}</td>
+      <td style="border:1px solid #000;padding:5px;text-align:right">${escapeHtml(r.amount)}</td>
+      <td style="border:1px solid #000;padding:5px;text-align:center">${escapeHtml(r.status)}</td>
+      <td style="border:1px solid #000;padding:5px;text-align:center">${escapeHtml(r.credit)}</td>
+      <td style="border:1px solid #000;padding:5px">${escapeHtml(r.comment)}</td>
+    </tr>`).join("");
+  return `
+    <div style="font-family:'Hind',Arial,sans-serif;color:#000;background:#fff;padding:16px;border:2px solid #000">
+      <h2 style="text-align:center;font-size:16px;margin:0">📊 Report${dateLabel ? " — " + dateLabel : " — Sabhi Dates"}</h2>
+      <p style="text-align:center;font-size:10.5px;margin:4px 0 10px">Labour Job Card System — ${fmtDate(todayISO())}${totalPages > 1 ? ` — Page ${pageNum}/${totalPages}` : ""}</p>
+      <table style="width:100%;border-collapse:collapse;font-size:10.5px">
+        <thead><tr>
+          <th style="border:1px solid #000;padding:5px;background:#f0f0f0;width:24px">#</th>
+          <th style="border:1px solid #000;padding:5px;background:#f0f0f0">Name</th>
+          <th style="border:1px solid #000;padding:5px;background:#f0f0f0">Jobcard No.</th>
+          <th style="border:1px solid #000;padding:5px;background:#f0f0f0">Kul Divas</th>
+          <th style="border:1px solid #000;padding:5px;background:#f0f0f0">Pratidin ₹</th>
+          <th style="border:1px solid #000;padding:5px;background:#f0f0f0">Kul Bhugtan ₹</th>
+          <th style="border:1px solid #000;padding:5px;background:#f0f0f0">Status</th>
+          <th style="border:1px solid #000;padding:5px;background:#f0f0f0">Credit</th>
+          <th style="border:1px solid #000;padding:5px;background:#f0f0f0">Comment</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p style="text-align:right;font-size:10px;color:#444;margin-top:12px;border-top:1px solid #999;padding-top:5px">Developed by Kurban Ali</p>
+    </div>`;
+}
+
+async function downloadReportPDF(){
+  const rows = getReportRowsData();
+  if(!rows.length){ toast("Pehle Report Generate karein", "error"); return; }
+  if(typeof window.jspdf === "undefined" || typeof html2canvas === "undefined"){
+    toast("PDF library load nahi hui — Internet check karke dobara try karein", "error"); return;
+  }
+  toast("PDF taiyar ho raha hai...", "info");
+  try{
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF("p", "mm", "a4"); // Portrait
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 10;
+    const ROWS_PER_PAGE = 26; // ek portrait page me jitni entry fit ho jaayein
+    const chunks = [];
+    for(let i = 0; i < rows.length; i += ROWS_PER_PAGE) chunks.push(rows.slice(i, i + ROWS_PER_PAGE));
+
+    const date = $("reportDate") ? $("reportDate").value : "";
+    const dateLabel = date ? fmtDate(date) : "";
+
+    const container = document.createElement("div");
+    container.style.cssText = "position:fixed;left:-10000px;top:0;width:700px;background:#fff";
+    document.body.appendChild(container);
+    try{
+      for(let p = 0; p < chunks.length; p++){
+        container.innerHTML = reportPrintDocHtml(chunks[p], dateLabel, p + 1, chunks.length, p * ROWS_PER_PAGE);
+        await new Promise(r => setTimeout(r, 60));
+        const canvas = await html2canvas(container.firstElementChild, { scale: 2, backgroundColor: "#ffffff", logging: false });
+        if(!canvas || !canvas.width) throw new Error("blank canvas");
+        const imgWidth = pageWidth - margin * 2;
+        const imgHeight = Math.min((canvas.height * imgWidth) / canvas.width, pageHeight - margin * 2);
+        if(p > 0) pdf.addPage();
+        pdf.addImage(canvas.toDataURL("image/png", 1.0), "PNG", margin, margin, imgWidth, imgHeight);
+      }
+    } finally { document.body.removeChild(container); }
+    pdf.save(`Report_${date || "All"}_${todayISO()}.pdf`);
+    toast("PDF Download ho gaya");
+  }catch(err){
+    console.error("Report PDF error:", err);
+    toast("PDF banane me dikkat hui, dobara try karein", "error");
+  }
 }
 
 /* ================================================================
