@@ -324,8 +324,7 @@ firebase.auth().onAuthStateChanged(user => {
 --------------------------------------------------------------- */
 function initStorage(uid){
   try{
-    // Sirf ROOT path se data — user-specific nahi (aapka pura data yahin hai)
-    dbRef = firebase.database().ref("labour_jobcard_data");
+    dbRef = firebase.database().ref("users/" + uid + "/labour_jobcard_data");
     firebaseEnabled = true;
 
     dbRef.on("value", snap => {
