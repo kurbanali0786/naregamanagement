@@ -391,6 +391,7 @@ function persist(){
 
 function renderAll(){
   renderDashboard();
+  renderLabourProfileList();
   renderLabours();
   renderDemandLabourList();
   renderDemands();
@@ -448,7 +449,7 @@ setupSwipeNav();
 
 // Har tab ka data dobara render karo — manual "Refresh" button aur tab-switch dono isi se chalte hain
 function refreshTab(name){
-  if(name === "dashboard") renderDashboard();
+  if(name === "dashboard"){ renderDashboard(); renderLabourProfileList(); }
   if(name === "labour") renderLabours();
   if(name === "past"){
     if($("onePasteDate") && !$("onePasteDate").value) $("onePasteDate").value = todayISO();
@@ -519,240 +520,346 @@ function renderDashboard(){
 }
 
 /* ================================================================
-   👤 LABOUR PROFILE — Dashboard se hi ek Labour dhoondh kar uski
-   pura Demand+Payment+AC-Credit history aur summary dikhata hai
+   👷 LABOUR PROFILE / SUMMARY (MERGED) — Search karke ek ya kai
+   Labour select karo (kuch select na karo to Sabhi Labour aa jaate
+   hain). Har selected Labour ka apna block — Date-wise poori History
+   + uski Kul Demand/Kul Din/Kul Payment/Credited/Pending summary.
+   Date Range (Quick buttons) aur Status (All/Credited/Pending) se
+   filter hota hai — jis Labour ki koi entry filter me nahi milti,
+   uska block hi report me nahi aata.
 ================================================================ */
-function renderLabourProfileSearch(){
-  const term = ($("labourProfileSearch").value || "").trim().toLowerCase();
-  const suggestBox = $("labourProfileSuggest");
-  if(!term){ suggestBox.innerHTML = ""; $("labourProfileBox").innerHTML = ""; return; }
+let lpSelected = new Set();   // selected Labour id's — khaali = "Sabhi Labour"
+let lpLastReport = [];        // Generate ke baad ka result — Print/PDF isi ko use karte hain
 
-  const matches = DATA.labours.filter(l =>
-    l.name.toLowerCase().includes(term) || String(l.jobcardNo || "").toLowerCase().includes(term)
-  ).slice(0, 8);
+function renderLabourProfileList(){
+  const term = ($("labourProfileSearch") && $("labourProfileSearch").value || "").trim().toLowerCase();
+  const box = $("labourProfileList");
+  if(!box) return;
 
-  if(!matches.length){
-    suggestBox.innerHTML = `<div class="empty mt">Koi Labour nahi mila.</div>`;
-    $("labourProfileBox").innerHTML = "";
+  let list = DATA.labours.slice().sort((a, b) => a.name.localeCompare(b.name));
+  if(term){
+    list = list.filter(l =>
+      l.name.toLowerCase().includes(term) || String(l.jobcardNo || "").toLowerCase().includes(term)
+    );
+  }
+
+  if(!list.length){
+    box.innerHTML = `<div class="empty">Koi Labour nahi mila.</div>`;
+    updateLpSelectedCount();
     return;
   }
 
-  // Ek hi exact match ho to seedha profile khol do, warna list dikhao chunne ke liye
-  if(matches.length === 1){
-    suggestBox.innerHTML = "";
-    renderLabourProfile(matches[0].id);
-    return;
-  }
-
-  suggestBox.innerHTML = `
-    <div class="chk-list mt">
-      ${matches.map(l => `
-        <div class="chk-item" style="cursor:pointer" onclick="pickLabourProfile('${l.id}')">
-          <div style="flex:1">
-            <div>${escapeHtml(l.name)} <span class="badge ${l.status.toLowerCase()}">${l.status}</span></div>
-            <div style="font-size:12px;color:var(--muted)">Jobcard: ${escapeHtml(l.jobcardNo)}</div>
-          </div>
-        </div>
-      `).join("")}
+  box.innerHTML = list.map(l => `
+    <div class="chk-item">
+      <input type="checkbox" class="lp-chk" value="${l.id}" ${lpSelected.has(l.id) ? "checked" : ""} onchange="toggleLpSelect('${l.id}', this.checked)">
+      <div style="flex:1">${escapeHtml(l.name)} <span class="badge ${l.status.toLowerCase()}">${l.status}</span>
+        <div style="font-size:11.5px;color:var(--muted)">Jobcard: ${escapeHtml(l.jobcardNo)}</div>
+      </div>
     </div>
-  `;
+  `).join("");
+  updateLpSelectedCount();
 }
 
-function pickLabourProfile(labourId){
-  $("labourProfileSuggest").innerHTML = "";
-  renderLabourProfile(labourId);
+function toggleLpSelect(id, checked){
+  if(checked) lpSelected.add(id); else lpSelected.delete(id);
+  updateLpSelectedCount();
 }
 
-function renderLabourProfile(labourId){
-  const l = DATA.labours.find(x => x.id === labourId);
-  const box = $("labourProfileBox");
-  if(!l){ box.innerHTML = ""; return; }
+// Abhi jitne bhi visible (search-filtered) Labour hain, sabko select karo
+function toggleLpSelectAll(){
+  const chks = document.querySelectorAll(".lp-chk");
+  if(!chks.length){ toast("Select karne ke liye koi Labour nahi hai", "error"); return; }
+  chks.forEach(chk => { chk.checked = true; lpSelected.add(chk.value); });
+  updateLpSelectedCount();
+  toast(`${chks.length} Labour select ho gaye`, "success");
+}
 
-  const demands = DATA.demands.filter(d => d.labourId === labourId).sort((a, b) => b.date.localeCompare(a.date));
+function clearLpSelection(){
+  lpSelected.clear();
+  document.querySelectorAll(".lp-chk").forEach(chk => chk.checked = false);
+  updateLpSelectedCount();
+}
+
+function updateLpSelectedCount(){
+  const el = $("lpSelectedCount");
+  if(!el) return;
+  el.textContent = lpSelected.size ? `${lpSelected.size} selected` : "Koi select nahi — Sabhi Labour aayenge";
+}
+
+// Quick Range buttons — 7 Din / 1-2-3 Mahine / Sabhi Dates
+function setLpQuickRange(type, btn){
+  document.querySelectorAll(".lp-quick-btn").forEach(b => b.classList.remove("active"));
+  if(btn) btn.classList.add("active");
+
+  const toISO = d => d.toISOString().split("T")[0];
+  if(type === "all"){
+    if($("lpFromDate")) $("lpFromDate").value = "";
+    if($("lpToDate")) $("lpToDate").value = "";
+    return;
+  }
+  const today = new Date();
+  const from = new Date(today);
+  if(type === "7d") from.setDate(from.getDate() - 7);
+  else if(type === "1m") from.setMonth(from.getMonth() - 1);
+  else if(type === "2m") from.setMonth(from.getMonth() - 2);
+  else if(type === "3m") from.setMonth(from.getMonth() - 3);
+
+  if($("lpFromDate")) $("lpFromDate").value = toISO(from);
+  if($("lpToDate")) $("lpToDate").value = toISO(today);
+}
+
+// Ek Labour ka data — date-range aur status-filter lagakar
+function getLabourProfileRows(labourId, fromDate, toDate, statusFilter){
   const creditedKeys = new Set(DATA.acCredits.filter(a => a.status === "Credited").map(a => a.date + "|" + a.labourId));
 
-  let kulDin = 0, kulPayment = 0, creditedAmt = 0, pendingAmt = 0, mateTotal = 0;
-  const rows = demands.map(d => {
+  let demands = DATA.demands.filter(d => d.labourId === labourId);
+  if(fromDate) demands = demands.filter(d => d.date >= fromDate);
+  if(toDate) demands = demands.filter(d => d.date <= toDate);
+  demands = demands.slice().sort((a, b) => a.date.localeCompare(b.date));
+
+  let rows = demands.map(d => {
     const p = DATA.payments.find(x => x.date === d.date && x.labourId === labourId);
     const ac = DATA.acCredits.find(x => x.date === d.date && x.labourId === labourId);
-    const status = ac ? ac.status : "Pending";
-    const amt = p ? (p.amount || 0) : 0;
-
-    kulDin += Number(d.kulDin) || 0;
-    kulPayment += amt;
-    mateTotal += p ? (p.mateShare || 0) : 0;
-    if(creditedKeys.has(d.date + "|" + labourId)) creditedAmt += amt; else pendingAmt += amt;
-
-    return { date: d.date, kulDin: d.kulDin ?? "—", pratidin: d.pratidin ?? "—", amount: amt, status, creditedDate: ac && ac.creditedDate ? fmtDate(ac.creditedDate) : "—" };
+    const status = creditedKeys.has(d.date + "|" + labourId) ? "Credited" : "Pending";
+    const amount = p ? (p.amount || 0) : 0;
+    return {
+      date: d.date, kulDin: d.kulDin ?? "", pratidin: d.pratidin ?? "",
+      amount, status, creditedDate: ac && ac.creditedDate ? ac.creditedDate : ""
+    };
   });
 
-  box.innerHTML = `
-    <div class="card" style="background:#fcfdfc">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
-        <div style="width:48px;height:48px;border-radius:50%;background:var(--green-light);color:var(--green-dark);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;flex-shrink:0">${escapeHtml(l.name.charAt(0))}</div>
+  if(statusFilter === "Credited") rows = rows.filter(r => r.status === "Credited");
+  else if(statusFilter === "Pending") rows = rows.filter(r => r.status === "Pending");
+
+  let kulDin = 0, kulPayment = 0, creditedAmt = 0, pendingAmt = 0;
+  rows.forEach(r => {
+    kulDin += Number(r.kulDin) || 0;
+    kulPayment += r.amount;
+    if(r.status === "Credited") creditedAmt += r.amount; else pendingAmt += r.amount;
+  });
+
+  return { rows, kulDin, kulPayment, creditedAmt, pendingAmt, demandCount: rows.length };
+}
+
+// Selected (ya Sabhi) Labour ke liye poora report ikattha karta hai —
+// jis Labour ki filter me koi entry nahi milti, uska block skip ho jaata hai
+function getLabourProfileReport(){
+  const fromDate = $("lpFromDate") ? $("lpFromDate").value : "";
+  const toDate = $("lpToDate") ? $("lpToDate").value : "";
+  const statusFilter = $("lpStatusFilter") ? $("lpStatusFilter").value : "All";
+
+  const targetLabours = lpSelected.size
+    ? DATA.labours.filter(l => lpSelected.has(l.id))
+    : DATA.labours.slice();
+
+  const blocks = targetLabours
+    .slice().sort((a, b) => a.name.localeCompare(b.name))
+    .map(l => ({ labour: l, ...getLabourProfileRows(l.id, fromDate, toDate, statusFilter) }))
+    .filter(b => b.rows.length > 0);
+
+  return { blocks, fromDate, toDate, statusFilter };
+}
+
+function labourProfileBlockHtml(b){
+  return `
+    <div class="lp-block">
+      <div class="lp-block-head">
+        <div class="lp-avatar">${escapeHtml(b.labour.name.charAt(0))}</div>
         <div>
-          <div style="font-size:16px;font-weight:700">${escapeHtml(l.name)} <span class="badge ${l.status.toLowerCase()}">${l.status}</span></div>
-          <div style="font-size:12px;color:var(--muted)">Jobcard: ${escapeHtml(l.jobcardNo)}</div>
+          <div class="lp-name">${escapeHtml(b.labour.name)} <span class="badge ${b.labour.status.toLowerCase()}">${b.labour.status}</span></div>
+          <div class="lp-jc">Jobcard: ${escapeHtml(b.labour.jobcardNo)}</div>
         </div>
       </div>
-
-      <div class="summary-grid mt">
-        <div class="sum-card"><div class="v">${demands.length}</div><div class="l">Kul Demand (baar)</div></div>
-        <div class="sum-card"><div class="v">${kulDin}</div><div class="l">Kul Din Kaam Kiya</div></div>
-        <div class="sum-card"><div class="v">₹${kulPayment.toFixed(2)}</div><div class="l">Kul Payment</div></div>
-        <div class="sum-card"><div class="v">₹${creditedAmt.toFixed(2)}</div><div class="l">Credit Ho Chuka</div></div>
-        <div class="sum-card"><div class="v">₹${pendingAmt.toFixed(2)}</div><div class="l">Abhi Pending</div></div>
-        <div class="sum-card"><div class="v">₹${mateTotal.toFixed(2)}</div><div class="l">Mate Share (Total)</div></div>
-      </div>
-
-      <div class="row mt">
-        <button class="btn btn-orange" onclick="downloadLabourProfilePDF('${labourId}')">⬇️ Is Labour ka PDF</button>
-      </div>
-
-      <h3 class="mt" style="font-size:14.5px">📜 Poora History</h3>
-      <div class="table-wrap mt">
+      <div class="table-wrap">
         <table>
-          <thead><tr><th>Date</th><th>Din</th><th>Dar</th><th>Amount</th><th>Status</th><th>Credited</th></tr></thead>
+          <thead><tr><th>Date</th><th>Din</th><th>Dar</th><th>Payment ₹</th><th>Status</th><th>Credited Date</th></tr></thead>
           <tbody>
-            ${rows.map(r => `
+            ${b.rows.map(r => `
               <tr>
                 <td>${fmtDate(r.date)}</td>
-                <td style="text-align:center">${r.kulDin}</td>
-                <td style="text-align:center">${r.pratidin}</td>
+                <td style="text-align:center">${r.kulDin || "—"}</td>
+                <td style="text-align:center">${r.pratidin || "—"}</td>
                 <td style="text-align:center">₹${r.amount}</td>
                 <td style="text-align:center"><span class="badge ${r.status.toLowerCase()}">${r.status}</span></td>
-                <td style="text-align:center">${r.creditedDate}</td>
+                <td style="text-align:center">${r.creditedDate ? fmtDate(r.creditedDate) : "—"}</td>
               </tr>
-            `).join("") || `<tr><td colspan="6" style="text-align:center;color:var(--muted)">Koi Demand nahi mili</td></tr>`}
+            `).join("")}
           </tbody>
         </table>
       </div>
+      <div class="lp-summary">
+        <span>Kul Demand: <b>${b.demandCount}</b></span>
+        <span>Kul Din: <b>${b.kulDin}</b></span>
+        <span>Kul Payment: <b>₹${b.kulPayment.toFixed(2)}</b></span>
+        <span>Credited: <b>₹${b.creditedAmt.toFixed(2)}</b></span>
+        <span>Pending: <b>₹${b.pendingAmt.toFixed(2)}</b></span>
+      </div>
     </div>
   `;
 }
 
-async function downloadLabourProfilePDF(labourId){
-  const l = DATA.labours.find(x => x.id === labourId);
-  if(!l) return;
+function lpRangeLabel(fromDate, toDate){
+  if(!fromDate && !toDate) return "Sabhi Dates";
+  return `${fromDate ? fmtDate(fromDate) : "Shuru"} se ${toDate ? fmtDate(toDate) : "Aaj"} tak`;
+}
 
-  const demands = DATA.demands.filter(d => d.labourId === labourId).sort((a, b) => a.date.localeCompare(b.date));
-  const creditedKeys = new Set(DATA.acCredits.filter(a => a.status === "Credited").map(a => a.date + "|" + a.labourId));
+function generateLabourProfileReport(){
+  const { blocks, fromDate, toDate, statusFilter } = getLabourProfileReport();
+  lpLastReport = { blocks, fromDate, toDate, statusFilter };
+  const box = $("labourProfileBox");
+  if(!box) return;
 
-  let kulDin = 0, kulPayment = 0, creditedAmt = 0, pendingAmt = 0;
-  const rows = demands.map(d => {
-    const p = DATA.payments.find(x => x.date === d.date && x.labourId === labourId);
-    const ac = DATA.acCredits.find(x => x.date === d.date && x.labourId === labourId);
-    const status = ac ? ac.status : "Pending";
-    const amt = p ? (p.amount || 0) : 0;
-    kulDin += Number(d.kulDin) || 0;
-    kulPayment += amt;
-    if(creditedKeys.has(d.date + "|" + labourId)) creditedAmt += amt; else pendingAmt += amt;
-    return { date: fmtDate(d.date), kulDin: d.kulDin ?? "—", pratidin: d.pratidin ?? "—", amount: amt, status, creditedDate: ac && ac.creditedDate ? fmtDate(ac.creditedDate) : "—" };
-  });
+  if(!blocks.length){
+    box.innerHTML = `<div class="empty mt">Is filter/date-range me koi Demand data nahi mila.</div>`;
+    return;
+  }
 
+  box.innerHTML = `
+    <div class="lp-doc-head">📊 Labour Report — ${blocks.length} Labour — ${lpRangeLabel(fromDate, toDate)} — ${statusFilter}</div>
+    ${blocks.map(labourProfileBlockHtml).join("")}
+  `;
+}
+
+function printLabourProfileReport(){
+  if(!lpLastReport.blocks || !lpLastReport.blocks.length){ toast("Pehle Generate karein", "error"); return; }
+  const st = document.createElement("style");
+  st.textContent = "@page{size:A4 portrait;margin:5mm}";
+  document.head.appendChild(st);
+  document.body.classList.add("print-lp");
+  window.print();
+  setTimeout(() => { document.body.classList.remove("print-lp"); st.remove(); }, 500);
+}
+
+/* PDF ke liye ek Labour ka block — black-border document style (baaki
+   PDF reports jaisa hi), taaki poori file me look consistent rahe */
+function labourProfileBlockPdfHtml(b){
+  return `
+    <div style="font-family:'Hind',Arial,sans-serif;color:#000;background:#fff;padding:6px;border:1px solid #000">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <div style="font-size:13.5px;font-weight:700">${escapeHtml(b.labour.name)}${b.partLabel || ""}</div>
+        <div style="font-size:11px;color:#555">Jobcard: ${escapeHtml(b.labour.jobcardNo)} · Status: ${escapeHtml(b.labour.status)}</div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:10.5px">
+        <thead><tr>
+          <th style="border:1px solid #000;padding:4px;background:#f0f0f0">Date</th>
+          <th style="border:1px solid #000;padding:4px;background:#f0f0f0">Din</th>
+          <th style="border:1px solid #000;padding:4px;background:#f0f0f0">Dar</th>
+          <th style="border:1px solid #000;padding:4px;background:#f0f0f0">Payment ₹</th>
+          <th style="border:1px solid #000;padding:4px;background:#f0f0f0">Status</th>
+          <th style="border:1px solid #000;padding:4px;background:#f0f0f0">Credited Date</th>
+        </tr></thead>
+        <tbody>
+          ${b.rows.map(r => `
+            <tr>
+              <td style="border:1px solid #000;padding:4px;text-align:center">${fmtDate(r.date)}</td>
+              <td style="border:1px solid #000;padding:4px;text-align:center">${r.kulDin || "—"}</td>
+              <td style="border:1px solid #000;padding:4px;text-align:center">${r.pratidin || "—"}</td>
+              <td style="border:1px solid #000;padding:4px;text-align:center">₹${r.amount}</td>
+              <td style="border:1px solid #000;padding:4px;text-align:center">${r.status}</td>
+              <td style="border:1px solid #000;padding:4px;text-align:center">${r.creditedDate ? fmtDate(r.creditedDate) : "—"}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+      <div style="margin-top:6px;font-size:10.5px;background:#f3f3f3;padding:5px 8px;border:1px solid #000">
+        Kul Demand: <b>${b.demandCount}</b> &nbsp;|&nbsp; Kul Din: <b>${b.kulDin}</b> &nbsp;|&nbsp;
+        Kul Payment: <b>₹${b.kulPayment.toFixed(2)}</b> &nbsp;|&nbsp;
+        Credited: <b>₹${b.creditedAmt.toFixed(2)}</b> &nbsp;|&nbsp; Pending: <b>₹${b.pendingAmt.toFixed(2)}</b>
+      </div>
+    </div>`;
+}
+
+function lpTitlePdfHtml(count, rangeLabel, statusFilter){
+  return `
+    <div style="font-family:'Hind',Arial,sans-serif;color:#000;background:#fff;padding:6px;border:1px solid #000;text-align:center">
+      <div style="font-size:15px;font-weight:700">Labour Report</div>
+      <div style="font-size:11px;color:#555;margin-top:3px">${count} Labour — ${rangeLabel} — ${statusFilter} — Labour Job Card System — ${fmtDate(todayISO())}</div>
+    </div>`;
+}
+
+function lpFooterPdfHtml(){
+  return `
+    <div style="font-family:'Hind',Arial,sans-serif;color:#444;background:#fff;padding:8px;text-align:right;font-size:10px;border-top:1px solid #999">
+      Developed by Kurban Ali
+    </div>`;
+}
+
+/* PDF Download — Portrait, kam margin, poori page width, aur har Labour
+   ka block bin-packing se lagta hai (jitna fit ho jaaye usi page pe,
+   block bich me nahi kategi — agar fit nahi hua to agle page pe jaayegi) */
+async function downloadLabourProfileReportPDF(){
+  if(!lpLastReport.blocks || !lpLastReport.blocks.length){ toast("Pehle Generate karein", "error"); return; }
+  if(typeof window.jspdf === "undefined" || typeof html2canvas === "undefined"){
+    toast("PDF library load nahi hui — Internet check karke dobara try karein", "error"); return;
+  }
   toast("PDF taiyar ho raha hai...", "info");
 
-  const node = document.createElement("div");
-  node.style.cssText = "position:fixed;left:-9999px;top:0;width:700px;background:#fff;padding:26px;font-family:'Hind',sans-serif;color:#2B2320";
-  node.innerHTML = `
-    <div style="text-align:center;border-bottom:2px solid #2B2320;padding-bottom:10px;margin-bottom:16px">
-      <div style="font-size:18px;font-weight:700">Labour Profile / Card</div>
-      <div style="font-size:12px;color:#7A6C5D;margin-top:2px">Labour Job Card System</div>
-    </div>
-    <table style="width:100%;border-collapse:collapse;font-size:12.5px;margin-bottom:14px">
-      <tr>
-        <td style="padding:4px 0;width:120px;color:#7A6C5D">Naam</td><td style="padding:4px 0;font-weight:700">${escapeHtml(l.name)}</td>
-        <td style="padding:4px 0;width:120px;color:#7A6C5D">Status</td><td style="padding:4px 0;font-weight:700">${escapeHtml(l.status)}</td>
-      </tr>
-      <tr>
-        <td style="padding:4px 0;color:#7A6C5D">Jobcard No.</td><td style="padding:4px 0;font-weight:700">${escapeHtml(l.jobcardNo)}</td>
-        <td style="padding:4px 0;color:#7A6C5D">Aadhar</td><td style="padding:4px 0;font-weight:700">${escapeHtml(l.aadhar || "—")}</td>
-      </tr>
-    </table>
-    <table style="width:100%;border-collapse:collapse;font-size:11.5px;margin-bottom:16px">
-      <tr style="background:#F3E3C6">
-        <th style="border:1px solid #2B2320;padding:6px">Kul Demand</th>
-        <th style="border:1px solid #2B2320;padding:6px">Kul Din</th>
-        <th style="border:1px solid #2B2320;padding:6px">Kul Payment</th>
-        <th style="border:1px solid #2B2320;padding:6px">Credited</th>
-        <th style="border:1px solid #2B2320;padding:6px">Pending</th>
-      </tr>
-      <tr style="text-align:center;font-weight:700">
-        <td style="border:1px solid #2B2320;padding:6px">${demands.length}</td>
-        <td style="border:1px solid #2B2320;padding:6px">${kulDin}</td>
-        <td style="border:1px solid #2B2320;padding:6px">₹${kulPayment.toFixed(2)}</td>
-        <td style="border:1px solid #2B2320;padding:6px;color:#2F7B4F">₹${creditedAmt.toFixed(2)}</td>
-        <td style="border:1px solid #2B2320;padding:6px;color:#B84B29">₹${pendingAmt.toFixed(2)}</td>
-      </tr>
-    </table>
-    <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Poora History</div>
-    <table style="width:100%;border-collapse:collapse;font-size:11px">
-      <thead><tr style="background:#F3E3C6">
-        <th style="border:1px solid #2B2320;padding:5px">Date</th>
-        <th style="border:1px solid #2B2320;padding:5px">Din</th>
-        <th style="border:1px solid #2B2320;padding:5px">Dar</th>
-        <th style="border:1px solid #2B2320;padding:5px">Amount</th>
-        <th style="border:1px solid #2B2320;padding:5px">Status</th>
-        <th style="border:1px solid #2B2320;padding:5px">Credited Date</th>
-      </tr></thead>
-      <tbody>
-        ${rows.map(r => `
-          <tr>
-            <td style="border:1px solid #2B2320;padding:5px;text-align:center">${r.date}</td>
-            <td style="border:1px solid #2B2320;padding:5px;text-align:center">${r.kulDin}</td>
-            <td style="border:1px solid #2B2320;padding:5px;text-align:center">${r.pratidin}</td>
-            <td style="border:1px solid #2B2320;padding:5px;text-align:center">₹${r.amount}</td>
-            <td style="border:1px solid #2B2320;padding:5px;text-align:center">${r.status}</td>
-            <td style="border:1px solid #2B2320;padding:5px;text-align:center">${r.creditedDate}</td>
-          </tr>
-        `).join("") || `<tr><td colspan="6" style="border:1px solid #2B2320;padding:8px;text-align:center">Koi Demand nahi mili</td></tr>`}
-      </tbody>
-    </table>
-    <div style="text-align:right;font-size:10px;color:#7A6C5D;margin-top:16px;border-top:1px solid #999;padding-top:6px">
-      Generated: ${fmtDate(todayISO())} · Developed by Kurban Ali
-    </div>
-  `;
-  document.body.appendChild(node);
+  const MAX_ROWS_PER_CHUNK = 26; // Bahut lambi history ho to Labour ka block isse bade chunks me tootega
+  const chunks = [lpTitlePdfHtml(lpLastReport.blocks.length, lpRangeLabel(lpLastReport.fromDate, lpLastReport.toDate), lpLastReport.statusFilter)];
 
-  try{
-    const canvas = await html2canvas(node, { scale: 2, backgroundColor: "#ffffff" });
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF("p", "mm", "a4");
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const margin = 10;
-    const imgWidth = pageWidth - margin * 2;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-    const usableHeight = pageHeight - margin * 2;
-
-    if(imgHeight <= usableHeight){
-      pdf.addImage(canvas.toDataURL("image/png"), "PNG", margin, margin, imgWidth, imgHeight);
+  lpLastReport.blocks.forEach(b => {
+    if(b.rows.length <= MAX_ROWS_PER_CHUNK){
+      chunks.push(labourProfileBlockPdfHtml({ ...b, partLabel: "" }));
     } else {
-      // Lamba history ho to multi-page me split karo
-      const pxPerMm = canvas.width / imgWidth;
-      const pageHeightPx = Math.floor(usableHeight * pxPerMm);
-      let renderedPx = 0, first = true;
-      while(renderedPx < canvas.height){
-        const sliceHeightPx = Math.min(pageHeightPx, canvas.height - renderedPx);
-        const pageCanvas = document.createElement("canvas");
-        pageCanvas.width = canvas.width; pageCanvas.height = sliceHeightPx;
-        const ctx = pageCanvas.getContext("2d");
-        ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
-        ctx.drawImage(canvas, 0, renderedPx, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx);
-        const sliceImgHeight = (sliceHeightPx * imgWidth) / canvas.width;
-        if(!first) pdf.addPage();
-        pdf.addImage(pageCanvas.toDataURL("image/png"), "PNG", margin, margin, imgWidth, sliceImgHeight);
-        renderedPx += sliceHeightPx;
-        first = false;
+      const total = Math.ceil(b.rows.length / MAX_ROWS_PER_CHUNK);
+      for(let i = 0; i < total; i++){
+        chunks.push(labourProfileBlockPdfHtml({
+          ...b,
+          rows: b.rows.slice(i * MAX_ROWS_PER_CHUNK, (i + 1) * MAX_ROWS_PER_CHUNK),
+          partLabel: ` (Part ${i + 1}/${total})`
+        }));
       }
     }
-    pdf.save(`Labour_Profile_${l.name.replace(/\s+/g, "_")}.pdf`);
+  });
+  chunks.push(lpFooterPdfHtml());
+
+  try{
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF("p", "mm", "a4"); // Portrait
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 4; // kam margin — poori page use ho
+    const usableWidth = pageWidth - margin * 2;
+
+    const container = document.createElement("div");
+    container.style.cssText = "position:fixed;left:-10000px;top:0;width:760px;background:#fff";
+    document.body.appendChild(container);
+
+    let yCursor = margin;
+    let pageHasContent = false;
+
+    try{
+      for(let i = 0; i < chunks.length; i++){
+        container.innerHTML = chunks[i];
+        await new Promise(r => setTimeout(r, 40));
+        const canvas = await html2canvas(container.firstElementChild, { scale: 2, backgroundColor: "#ffffff", logging: false });
+        if(!canvas || !canvas.width) continue;
+
+        let imgWidth = usableWidth;
+        let imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+        // Agar akela chunk hi ek page se lamba hai (bahut rare), to use page ki height me fit kar do
+        if(imgHeight > pageHeight - margin * 2){
+          imgHeight = pageHeight - margin * 2;
+          imgWidth = (canvas.width * imgHeight) / canvas.height;
+        }
+
+        if(pageHasContent && yCursor + imgHeight > pageHeight - margin){
+          pdf.addPage();
+          yCursor = margin;
+          pageHasContent = false;
+        }
+        pdf.addImage(canvas.toDataURL("image/png", 1.0), "PNG", margin, yCursor, imgWidth, imgHeight);
+        yCursor += imgHeight + 2.5;
+        pageHasContent = true;
+      }
+    } finally { document.body.removeChild(container); }
+
+    pdf.save(`Labour_Report_${todayISO()}.pdf`);
     toast("PDF Download ho gaya");
-  } catch(err){
-    console.error(err);
+  }catch(err){
+    console.error("Labour Profile Report PDF error:", err);
     toast("PDF banane me dikkat hui, dobara try karein", "error");
-  } finally {
-    document.body.removeChild(node);
   }
 }
 
@@ -1864,7 +1971,7 @@ function labourPrintDocHtml(pageRows, filter, pageNum, totalPages, startIndex){
       <td style="border:1px solid #000;padding:6px">${escapeHtml(l.aadhar || "")}</td>
       <td style="border:1px solid #000;padding:6px;text-align:center">${l.status}</td></tr>`).join("");
   return `
-    <div style="font-family:'Hind',Arial,sans-serif;color:#000;background:#fff;padding:18px;border:2px solid #000">
+    <div style="font-family:'Hind',Arial,sans-serif;color:#000;background:#fff;padding:6px;border:1px solid #000">
       <h2 style="text-align:center;font-size:17px;margin:0">👷 Labour List — ${filter || "All Status"}</h2>
       <p style="text-align:center;font-size:11.5px;margin:4px 0 12px">Labour Job Card System — ${fmtDate(todayISO())}${totalPages > 1 ? ` — Page ${pageNum}/${totalPages}` : ""}</p>
       <table style="width:100%;border-collapse:collapse;font-size:12.5px">
@@ -1902,8 +2009,8 @@ async function downloadLabourPDF(){
     const pdf = new jsPDF("p", "mm", "a4");
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
-    const margin = 10;
-    const ROWS_PER_PAGE = 24;
+    const margin = 4;
+    const ROWS_PER_PAGE = 30;
     const chunks = [];
     for(let i = 0; i < list.length; i += ROWS_PER_PAGE) chunks.push(list.slice(i, i + ROWS_PER_PAGE));
 
@@ -2464,7 +2571,7 @@ function reportPrintDocHtml(pageRows, dateLabel, pageNum, totalPages, startIndex
       <td style="border:1px solid #000;padding:5px">${escapeHtml(r.comment)}</td>
     </tr>`).join("");
   return `
-    <div style="font-family:'Hind',Arial,sans-serif;color:#000;background:#fff;padding:16px;border:2px solid #000">
+    <div style="font-family:'Hind',Arial,sans-serif;color:#000;background:#fff;padding:6px;border:1px solid #000">
       <h2 style="text-align:center;font-size:16px;margin:0">📊 Report${dateLabel ? " — " + dateLabel : " — Sabhi Dates"}</h2>
       <p style="text-align:center;font-size:10.5px;margin:4px 0 10px">Labour Job Card System — ${fmtDate(todayISO())}${totalPages > 1 ? ` — Page ${pageNum}/${totalPages}` : ""}</p>
       <table style="width:100%;border-collapse:collapse;font-size:10.5px">
@@ -2497,8 +2604,8 @@ async function downloadReportPDF(){
     const pdf = new jsPDF("p", "mm", "a4"); // Portrait
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
-    const margin = 10;
-    const ROWS_PER_PAGE = 26; // ek portrait page me jitni entry fit ho jaayein
+    const margin = 4; // kam margin — poori page use ho
+    const ROWS_PER_PAGE = 32; // ek portrait page me jitni entry fit ho jaayein
     const chunks = [];
     for(let i = 0; i < rows.length; i += ROWS_PER_PAGE) chunks.push(rows.slice(i, i + ROWS_PER_PAGE));
 
