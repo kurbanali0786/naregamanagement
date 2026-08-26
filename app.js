@@ -519,6 +519,244 @@ function renderDashboard(){
 }
 
 /* ================================================================
+   👤 LABOUR PROFILE — Dashboard se hi ek Labour dhoondh kar uski
+   pura Demand+Payment+AC-Credit history aur summary dikhata hai
+================================================================ */
+function renderLabourProfileSearch(){
+  const term = ($("labourProfileSearch").value || "").trim().toLowerCase();
+  const suggestBox = $("labourProfileSuggest");
+  if(!term){ suggestBox.innerHTML = ""; $("labourProfileBox").innerHTML = ""; return; }
+
+  const matches = DATA.labours.filter(l =>
+    l.name.toLowerCase().includes(term) || String(l.jobcardNo || "").toLowerCase().includes(term)
+  ).slice(0, 8);
+
+  if(!matches.length){
+    suggestBox.innerHTML = `<div class="empty mt">Koi Labour nahi mila.</div>`;
+    $("labourProfileBox").innerHTML = "";
+    return;
+  }
+
+  // Ek hi exact match ho to seedha profile khol do, warna list dikhao chunne ke liye
+  if(matches.length === 1){
+    suggestBox.innerHTML = "";
+    renderLabourProfile(matches[0].id);
+    return;
+  }
+
+  suggestBox.innerHTML = `
+    <div class="chk-list mt">
+      ${matches.map(l => `
+        <div class="chk-item" style="cursor:pointer" onclick="pickLabourProfile('${l.id}')">
+          <div style="flex:1">
+            <div>${escapeHtml(l.name)} <span class="badge ${l.status.toLowerCase()}">${l.status}</span></div>
+            <div style="font-size:12px;color:var(--muted)">Jobcard: ${escapeHtml(l.jobcardNo)}</div>
+          </div>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function pickLabourProfile(labourId){
+  $("labourProfileSuggest").innerHTML = "";
+  renderLabourProfile(labourId);
+}
+
+function renderLabourProfile(labourId){
+  const l = DATA.labours.find(x => x.id === labourId);
+  const box = $("labourProfileBox");
+  if(!l){ box.innerHTML = ""; return; }
+
+  const demands = DATA.demands.filter(d => d.labourId === labourId).sort((a, b) => b.date.localeCompare(a.date));
+  const creditedKeys = new Set(DATA.acCredits.filter(a => a.status === "Credited").map(a => a.date + "|" + a.labourId));
+
+  let kulDin = 0, kulPayment = 0, creditedAmt = 0, pendingAmt = 0, mateTotal = 0;
+  const rows = demands.map(d => {
+    const p = DATA.payments.find(x => x.date === d.date && x.labourId === labourId);
+    const ac = DATA.acCredits.find(x => x.date === d.date && x.labourId === labourId);
+    const status = ac ? ac.status : "Pending";
+    const amt = p ? (p.amount || 0) : 0;
+
+    kulDin += Number(d.kulDin) || 0;
+    kulPayment += amt;
+    mateTotal += p ? (p.mateShare || 0) : 0;
+    if(creditedKeys.has(d.date + "|" + labourId)) creditedAmt += amt; else pendingAmt += amt;
+
+    return { date: d.date, kulDin: d.kulDin ?? "—", pratidin: d.pratidin ?? "—", amount: amt, status, creditedDate: ac && ac.creditedDate ? fmtDate(ac.creditedDate) : "—" };
+  });
+
+  box.innerHTML = `
+    <div class="card" style="background:#fcfdfc">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
+        <div style="width:48px;height:48px;border-radius:50%;background:var(--green-light);color:var(--green-dark);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;flex-shrink:0">${escapeHtml(l.name.charAt(0))}</div>
+        <div>
+          <div style="font-size:16px;font-weight:700">${escapeHtml(l.name)} <span class="badge ${l.status.toLowerCase()}">${l.status}</span></div>
+          <div style="font-size:12px;color:var(--muted)">Jobcard: ${escapeHtml(l.jobcardNo)}</div>
+        </div>
+      </div>
+
+      <div class="summary-grid mt">
+        <div class="sum-card"><div class="v">${demands.length}</div><div class="l">Kul Demand (baar)</div></div>
+        <div class="sum-card"><div class="v">${kulDin}</div><div class="l">Kul Din Kaam Kiya</div></div>
+        <div class="sum-card"><div class="v">₹${kulPayment.toFixed(2)}</div><div class="l">Kul Payment</div></div>
+        <div class="sum-card"><div class="v">₹${creditedAmt.toFixed(2)}</div><div class="l">Credit Ho Chuka</div></div>
+        <div class="sum-card"><div class="v">₹${pendingAmt.toFixed(2)}</div><div class="l">Abhi Pending</div></div>
+        <div class="sum-card"><div class="v">₹${mateTotal.toFixed(2)}</div><div class="l">Mate Share (Total)</div></div>
+      </div>
+
+      <div class="row mt">
+        <button class="btn btn-orange" onclick="downloadLabourProfilePDF('${labourId}')">⬇️ Is Labour ka PDF</button>
+      </div>
+
+      <h3 class="mt" style="font-size:14.5px">📜 Poora History</h3>
+      <div class="table-wrap mt">
+        <table>
+          <thead><tr><th>Date</th><th>Din</th><th>Dar</th><th>Amount</th><th>Status</th><th>Credited</th></tr></thead>
+          <tbody>
+            ${rows.map(r => `
+              <tr>
+                <td>${fmtDate(r.date)}</td>
+                <td style="text-align:center">${r.kulDin}</td>
+                <td style="text-align:center">${r.pratidin}</td>
+                <td style="text-align:center">₹${r.amount}</td>
+                <td style="text-align:center"><span class="badge ${r.status.toLowerCase()}">${r.status}</span></td>
+                <td style="text-align:center">${r.creditedDate}</td>
+              </tr>
+            `).join("") || `<tr><td colspan="6" style="text-align:center;color:var(--muted)">Koi Demand nahi mili</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+async function downloadLabourProfilePDF(labourId){
+  const l = DATA.labours.find(x => x.id === labourId);
+  if(!l) return;
+
+  const demands = DATA.demands.filter(d => d.labourId === labourId).sort((a, b) => a.date.localeCompare(b.date));
+  const creditedKeys = new Set(DATA.acCredits.filter(a => a.status === "Credited").map(a => a.date + "|" + a.labourId));
+
+  let kulDin = 0, kulPayment = 0, creditedAmt = 0, pendingAmt = 0;
+  const rows = demands.map(d => {
+    const p = DATA.payments.find(x => x.date === d.date && x.labourId === labourId);
+    const ac = DATA.acCredits.find(x => x.date === d.date && x.labourId === labourId);
+    const status = ac ? ac.status : "Pending";
+    const amt = p ? (p.amount || 0) : 0;
+    kulDin += Number(d.kulDin) || 0;
+    kulPayment += amt;
+    if(creditedKeys.has(d.date + "|" + labourId)) creditedAmt += amt; else pendingAmt += amt;
+    return { date: fmtDate(d.date), kulDin: d.kulDin ?? "—", pratidin: d.pratidin ?? "—", amount: amt, status, creditedDate: ac && ac.creditedDate ? fmtDate(ac.creditedDate) : "—" };
+  });
+
+  toast("PDF taiyar ho raha hai...", "info");
+
+  const node = document.createElement("div");
+  node.style.cssText = "position:fixed;left:-9999px;top:0;width:700px;background:#fff;padding:26px;font-family:'Hind',sans-serif;color:#2B2320";
+  node.innerHTML = `
+    <div style="text-align:center;border-bottom:2px solid #2B2320;padding-bottom:10px;margin-bottom:16px">
+      <div style="font-size:18px;font-weight:700">Labour Profile / Card</div>
+      <div style="font-size:12px;color:#7A6C5D;margin-top:2px">Labour Job Card System</div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:12.5px;margin-bottom:14px">
+      <tr>
+        <td style="padding:4px 0;width:120px;color:#7A6C5D">Naam</td><td style="padding:4px 0;font-weight:700">${escapeHtml(l.name)}</td>
+        <td style="padding:4px 0;width:120px;color:#7A6C5D">Status</td><td style="padding:4px 0;font-weight:700">${escapeHtml(l.status)}</td>
+      </tr>
+      <tr>
+        <td style="padding:4px 0;color:#7A6C5D">Jobcard No.</td><td style="padding:4px 0;font-weight:700">${escapeHtml(l.jobcardNo)}</td>
+        <td style="padding:4px 0;color:#7A6C5D">Aadhar</td><td style="padding:4px 0;font-weight:700">${escapeHtml(l.aadhar || "—")}</td>
+      </tr>
+    </table>
+    <table style="width:100%;border-collapse:collapse;font-size:11.5px;margin-bottom:16px">
+      <tr style="background:#F3E3C6">
+        <th style="border:1px solid #2B2320;padding:6px">Kul Demand</th>
+        <th style="border:1px solid #2B2320;padding:6px">Kul Din</th>
+        <th style="border:1px solid #2B2320;padding:6px">Kul Payment</th>
+        <th style="border:1px solid #2B2320;padding:6px">Credited</th>
+        <th style="border:1px solid #2B2320;padding:6px">Pending</th>
+      </tr>
+      <tr style="text-align:center;font-weight:700">
+        <td style="border:1px solid #2B2320;padding:6px">${demands.length}</td>
+        <td style="border:1px solid #2B2320;padding:6px">${kulDin}</td>
+        <td style="border:1px solid #2B2320;padding:6px">₹${kulPayment.toFixed(2)}</td>
+        <td style="border:1px solid #2B2320;padding:6px;color:#2F7B4F">₹${creditedAmt.toFixed(2)}</td>
+        <td style="border:1px solid #2B2320;padding:6px;color:#B84B29">₹${pendingAmt.toFixed(2)}</td>
+      </tr>
+    </table>
+    <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Poora History</div>
+    <table style="width:100%;border-collapse:collapse;font-size:11px">
+      <thead><tr style="background:#F3E3C6">
+        <th style="border:1px solid #2B2320;padding:5px">Date</th>
+        <th style="border:1px solid #2B2320;padding:5px">Din</th>
+        <th style="border:1px solid #2B2320;padding:5px">Dar</th>
+        <th style="border:1px solid #2B2320;padding:5px">Amount</th>
+        <th style="border:1px solid #2B2320;padding:5px">Status</th>
+        <th style="border:1px solid #2B2320;padding:5px">Credited Date</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map(r => `
+          <tr>
+            <td style="border:1px solid #2B2320;padding:5px;text-align:center">${r.date}</td>
+            <td style="border:1px solid #2B2320;padding:5px;text-align:center">${r.kulDin}</td>
+            <td style="border:1px solid #2B2320;padding:5px;text-align:center">${r.pratidin}</td>
+            <td style="border:1px solid #2B2320;padding:5px;text-align:center">₹${r.amount}</td>
+            <td style="border:1px solid #2B2320;padding:5px;text-align:center">${r.status}</td>
+            <td style="border:1px solid #2B2320;padding:5px;text-align:center">${r.creditedDate}</td>
+          </tr>
+        `).join("") || `<tr><td colspan="6" style="border:1px solid #2B2320;padding:8px;text-align:center">Koi Demand nahi mili</td></tr>`}
+      </tbody>
+    </table>
+    <div style="text-align:right;font-size:10px;color:#7A6C5D;margin-top:16px;border-top:1px solid #999;padding-top:6px">
+      Generated: ${fmtDate(todayISO())} · Developed by Kurban Ali
+    </div>
+  `;
+  document.body.appendChild(node);
+
+  try{
+    const canvas = await html2canvas(node, { scale: 2, backgroundColor: "#ffffff" });
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF("p", "mm", "a4");
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 10;
+    const imgWidth = pageWidth - margin * 2;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    const usableHeight = pageHeight - margin * 2;
+
+    if(imgHeight <= usableHeight){
+      pdf.addImage(canvas.toDataURL("image/png"), "PNG", margin, margin, imgWidth, imgHeight);
+    } else {
+      // Lamba history ho to multi-page me split karo
+      const pxPerMm = canvas.width / imgWidth;
+      const pageHeightPx = Math.floor(usableHeight * pxPerMm);
+      let renderedPx = 0, first = true;
+      while(renderedPx < canvas.height){
+        const sliceHeightPx = Math.min(pageHeightPx, canvas.height - renderedPx);
+        const pageCanvas = document.createElement("canvas");
+        pageCanvas.width = canvas.width; pageCanvas.height = sliceHeightPx;
+        const ctx = pageCanvas.getContext("2d");
+        ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+        ctx.drawImage(canvas, 0, renderedPx, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx);
+        const sliceImgHeight = (sliceHeightPx * imgWidth) / canvas.width;
+        if(!first) pdf.addPage();
+        pdf.addImage(pageCanvas.toDataURL("image/png"), "PNG", margin, margin, imgWidth, sliceImgHeight);
+        renderedPx += sliceHeightPx;
+        first = false;
+      }
+    }
+    pdf.save(`Labour_Profile_${l.name.replace(/\s+/g, "_")}.pdf`);
+    toast("PDF Download ho gaya");
+  } catch(err){
+    console.error(err);
+    toast("PDF banane me dikkat hui, dobara try karein", "error");
+  } finally {
+    document.body.removeChild(node);
+  }
+}
+
+/* ================================================================
    💾 DATA BACKUP / RESTORE (JSON)
 ================================================================ */
 /* ================================================================
@@ -892,8 +1130,9 @@ function processLabourImportRows(rows){
     if(aadhar && !/^\d{12}$/.test(aadhar)){ aadhar = ""; }
 
     const dupAadhar = aadhar ? DATA.labours.find(l => l.aadhar === aadhar) : null;
-    const dupName = DATA.labours.find(l => l.name.toLowerCase() === name.toLowerCase());
-    if(dupAadhar || dupName){ skipped++; continue; }
+    // Pati-patni same Jobcard use karte hain — 2 tak allowed, teesri baar hi skip
+    const sameJobcardCount = DATA.labours.filter(l => shortJobcard(l.jobcardNo) === shortJobcard(jobcardNo)).length;
+    if(dupAadhar || sameJobcardCount >= 2){ skipped++; continue; }
 
     DATA.labours.push({ id: makeId(), jobcardNo, name, aadhar, status });
     added++;
@@ -1401,8 +1640,8 @@ function confirmOnePaste(){
 
     // 2) Payment — agar is date ki pehle se nahi hai
     if(!DATA.payments.some(p => p.date === date && p.labourId === labourId)){
-      const mateShare = +(amount * 0.5).toFixed(2);
-      const labourShare = +(amount * 0.5).toFixed(2);
+      const mateShare = 0;
+      const labourShare = amount;
       DATA.payments.push({ id: makeId(), date, labourId, amount, mateShare, labourShare });
       addedPayment++;
 
@@ -1451,9 +1690,11 @@ function saveLabour(){
     toast(`Yeh Aadhar No. pehle se hai — ${dupAadhar.name} (Jobcard ${dupAadhar.jobcardNo})`, "error");
     return;
   }
-  const dupName = DATA.labours.find(l => l.name.toLowerCase() === name.toLowerCase() && l.id !== editingLabourId);
-  if(dupName){
-    toast("Yeh Naam pehle se list me hai — Duplicate allow nahi hai", "error");
+  // Pati-patni same Jobcard use karte hain — isliye ek Jobcard max 2 baar allowed hai,
+  // teesri baar (same jobcard) par hi rokna hai
+  const sameJobcardCount = DATA.labours.filter(l => shortJobcard(l.jobcardNo) === shortJobcard(jobcardNo) && l.id !== editingLabourId).length;
+  if(sameJobcardCount >= 2){
+    toast("Yeh Jobcard No. pehle se 2 baar hai (pati-patni tak allowed) — teesri baar add nahi ho sakta", "error");
     return;
   }
 
@@ -1883,8 +2124,8 @@ function updateDemandAmount(demandId, value){
   const amt = parseFloat(value);
   if(!amt || amt <= 0){ toast("Sahi Amount daalein", "error"); renderDemands(); return; }
   p.amount = amt;
-  p.mateShare = +(amt * 0.5).toFixed(2);
-  p.labourShare = +(amt * 0.5).toFixed(2);
+  p.mateShare = 0;
+  p.labourShare = amt;
   persist();
   renderDashboard();
   toast("Kul Bhugtan update ho gaya");

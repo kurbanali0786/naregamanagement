@@ -272,6 +272,17 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
         </div>
         <div class="summary-grid mt" id="dashboardSummary"></div>
       </div>
+
+      <!-- ==== LABOUR PROFILE ==== -->
+      <div class="card">
+        <h3>👤 Labour Profile</h3>
+        <p style="font-size:12.5px;color:var(--muted);margin-bottom:10px">Ek Labour dhoondein — uski Kul Demand, Kul Din, Payment, Credited/Pending amount aur poori History ek jagah dikhegi.</p>
+        <div class="row">
+          <input type="text" id="labourProfileSearch" class="grow" placeholder="🔍 Naam ya Jobcard se dhoondein" oninput="renderLabourProfileSearch()">
+        </div>
+        <div id="labourProfileSuggest"></div>
+        <div id="labourProfileBox" class="mt"></div>
+      </div>
       <div class="card">
         <h3>💾 Data Backup / Restore</h3>
         <p style="font-size:12.5px;color:var(--muted);margin-bottom:10px">Apna pura data ek JSON file me safe rakhein — Firebase kharab ho ya galti se data delete ho jaaye, to isi file se wapas load kar sakte hain.</p>
@@ -619,7 +630,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   }
 </script>
-<script src="app.js?v=21"></script>
+<script src="app.js?v=22"></script>
 <script>
 /* Agar app.js load hi na ho (404 / internet / purani cache) to Login button "dead" lagta hai —
    user ko saaf message dikhao ki asli problem kya hai */
