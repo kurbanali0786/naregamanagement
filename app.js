@@ -389,7 +389,26 @@ function persist(){
   }
 }
 
+// Purani/kharab save hui entries me Mate Share/Labour Share theek karta hai
+// (jaise Amount ka aadha-aadha na ho) — taaki sabhi Demand ka Mate Share sahi aaye
+function repairMateShare(){
+  let fixed = 0;
+  DATA.payments.forEach(p => {
+    const amt = Number(p.amount) || 0;
+    const expected = amt * 0.5;
+    const mate = Number(p.mateShare) || 0;
+    const labour = Number(p.labourShare) || 0;
+    if(Math.abs(mate - expected) > 0.01 || Math.abs(labour - expected) > 0.01){
+      p.mateShare = expected;
+      p.labourShare = expected;
+      fixed++;
+    }
+  });
+  if(fixed > 0) persist();
+}
+
 function renderAll(){
+  repairMateShare();
   renderDashboard();
   renderLabourProfileList();
   renderLabours();
@@ -503,7 +522,7 @@ function renderDashboard(){
   DATA.payments.forEach(p => {
     if(creditedKeys.has(p.date + "|" + p.labourId)){
       creditedAmount += (p.amount || 0);
-      creditedMateShare += (p.mateShare || 0);
+      creditedMateShare += (Number(p.amount) || 0) * 0.5;
     } else {
       pendingAmount += (p.amount || 0);
     }
@@ -1745,10 +1764,10 @@ function confirmOnePaste(){
       addedDemand++;
     }
 
-    // 2) Payment — agar is date ki pehle se nahi hai
+    // 2) Payment — agar is date ki pehle se nahi hai (Amount ka aadha Mate Share, aadha Labour Share)
     if(!DATA.payments.some(p => p.date === date && p.labourId === labourId)){
-      const mateShare = 0;
-      const labourShare = amount;
+      const mateShare = amount * 0.5;
+      const labourShare = amount * 0.5;
       DATA.payments.push({ id: makeId(), date, labourId, amount, mateShare, labourShare });
       addedPayment++;
 
@@ -2222,7 +2241,7 @@ function saveReportComment(demandId){
   toast("Comment save ho gaya", "success");
 }
 
-// Kul Bhugtan (₹) — linked Payment ka amount update hota hai (50/50 Mate/Labour share bhi dobara banta hai)
+// Kul Bhugtan (₹) — linked Payment ka amount update hota hai (Amount ka aadha Mate Share, aadha Labour Share)
 function updateDemandAmount(demandId, value){
   const d = DATA.demands.find(x => x.id === demandId);
   if(!d) return;
@@ -2231,8 +2250,8 @@ function updateDemandAmount(demandId, value){
   const amt = parseFloat(value);
   if(!amt || amt <= 0){ toast("Sahi Amount daalein", "error"); renderDemands(); return; }
   p.amount = amt;
-  p.mateShare = 0;
-  p.labourShare = amt;
+  p.mateShare = amt * 0.5;
+  p.labourShare = amt * 0.5;
   persist();
   renderDashboard();
   toast("Kul Bhugtan update ho gaya");
@@ -2471,7 +2490,7 @@ function generateReport(){
     const ac = DATA.acCredits.find(x => x.date === d.date && x.labourId === d.labourId);
     const acStatus = ac ? ac.status : (p ? "Pending" : "—");
 
-    if(p){ totalPayment += Number(p.amount) || 0; totalMate += Number(p.mateShare) || 0; totalLabour += Number(p.labourShare) || 0; }
+    if(p){ totalPayment += Number(p.amount) || 0; totalMate += (Number(p.amount) || 0) * 0.5; totalLabour += (Number(p.amount) || 0) * 0.5; }
     if(acStatus === "Credited") creditedCount++;
 
     const creditDate = ac ? fmtDate(ac.creditedDate || ac.date) : "";
