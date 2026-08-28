@@ -185,6 +185,9 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
 .lp-jc{font-size:11.5px;color:var(--muted)}
 .lp-summary{display:flex;gap:10px;flex-wrap:wrap;background:var(--green-light);border-radius:8px;padding:8px 12px;font-size:11.5px;margin-top:8px}
 .lp-summary b{color:var(--green-dark)}
+.jc-group{border:1.5px solid var(--green-light);border-radius:10px;overflow:hidden;margin-top:12px}
+.jc-group-head{background:linear-gradient(135deg,var(--green-dark),var(--green));color:#fff;padding:9px 13px;font-size:12.5px;font-weight:700}
+.jc-group .lp-block{border-top:1px solid #eef2ee;border-radius:0}
 .quick-range{display:flex;gap:6px;flex-wrap:wrap}
 .quick-range button{padding:6px 12px;font-size:12px}
 .lp-quick-btn.active{background:var(--green);color:#fff}
@@ -583,6 +586,15 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
           <input type="text" id="nregaSearch" class="grow" placeholder="🔍 Naam / Jobcard se search karein" oninput="renderNregaSearch()">
         </div>
         <div class="row mt">
+          <select id="nregaFilterMode">
+            <option value="gt">Hajri — Isse Zyada</option>
+            <option value="lt">Hajri — Isse Kam</option>
+          </select>
+          <input type="number" id="nregaFilterVal" placeholder="jaise 50" style="width:100px">
+          <button class="btn btn-outline btn-sm" onclick="applyNregaFilter()">Filter Lagayein</button>
+          <button class="btn btn-gray btn-sm" onclick="clearNregaFilter()">Filter Clear</button>
+        </div>
+        <div class="row mt">
           <label style="font-size:13.5px;display:flex;align-items:center;gap:8px;font-weight:600">
             <input type="checkbox" id="nregaSelectAll" onchange="toggleNregaSelectAll()"> Sabhi Select karein
           </label>
@@ -678,7 +690,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   }
 </script>
-<script src="app.js?v=25"></script>
+<script src="app.js?v=26"></script>
 <script>
 /* Agar app.js load hi na ho (404 / internet / purani cache) to Login button "dead" lagta hai —
    user ko saaf message dikhao ki asli problem kya hai */

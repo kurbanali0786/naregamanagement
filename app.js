@@ -550,6 +550,26 @@ function renderDashboard(){
 let lpSelected = new Set();   // selected Labour id's — khaali = "Sabhi Labour"
 let lpLastReport = [];        // Generate ke baad ka result — Print/PDF isi ko use karte hain
 
+const JOBCARD_DIN_LIMIT = 125; // Har Jobcard pe (1 ya 2+ naam) itni Hajri milti hai (sab naamon ke saath)
+
+// Ek Labour ke ab tak ke Kul Din (sabhi Demand jod ke)
+function getLabourDinHue(labourId){
+  return DATA.demands
+    .filter(d => d.labourId === labourId)
+    .reduce((sum, d) => sum + (Number(d.kulDin) || 0), 0);
+}
+
+// Ek Jobcard Number pe (jitne bhi naam us par hain) sabke Din jod kar
+function getJobcardDinHue(jobcardNo){
+  const ids = DATA.labours.filter(l => l.jobcardNo === jobcardNo).map(l => l.id);
+  return ids.reduce((sum, id) => sum + getLabourDinHue(id), 0);
+}
+
+// Us Jobcard ke 125 me se kitne Din abhi baaki hain (sabhi naam milakar — saanjha)
+function getJobcardBaaki(jobcardNo){
+  return Math.max(0, JOBCARD_DIN_LIMIT - getJobcardDinHue(jobcardNo));
+}
+
 function renderLabourProfileList(){
   const term = ($("labourProfileSearch") && $("labourProfileSearch").value || "").trim().toLowerCase();
   const box = $("labourProfileList");
@@ -679,6 +699,19 @@ function getLabourProfileReport(){
   return { blocks, fromDate, toDate, statusFilter };
 }
 
+// Blocks ko Jobcard Number ke hisaab se group karta hai (jinka Jobcard same
+// hai — jaise Pati-Patni — wo ek saath ek group me aa jaate hain)
+function groupBlocksByJobcard(blocks){
+  const order = [];
+  const map = {};
+  blocks.forEach(b => {
+    const jc = b.labour.jobcardNo || "—";
+    if(!map[jc]){ map[jc] = []; order.push(jc); }
+    map[jc].push(b);
+  });
+  return order.map(jc => ({ jobcardNo: jc, members: map[jc] }));
+}
+
 function labourProfileBlockHtml(b){
   return `
     <div class="lp-block">
@@ -733,9 +766,15 @@ function generateLabourProfileReport(){
     return;
   }
 
+  const groups = groupBlocksByJobcard(blocks);
   box.innerHTML = `
     <div class="lp-doc-head">📊 Labour Report — ${blocks.length} Labour — ${lpRangeLabel(fromDate, toDate)} — ${statusFilter}</div>
-    ${blocks.map(labourProfileBlockHtml).join("")}
+    ${groups.map(g => `
+      <div class="jc-group">
+        <div class="jc-group-head">Jobcard: ${escapeHtml(g.jobcardNo)}</div>
+        ${g.members.map(labourProfileBlockHtml).join("")}
+      </div>
+    `).join("")}
   `;
 }
 
@@ -803,6 +842,14 @@ function lpFooterPdfHtml(){
     </div>`;
 }
 
+// Jobcard group ka chhota header — jab bhi naya Jobcard shuru ho
+function jcGroupHeaderPdfHtml(jobcardNo){
+  return `
+    <div style="font-family:'Hind',Arial,sans-serif;color:#fff;background:#0a3b24;padding:6px 10px;font-size:11.5px;font-weight:700">
+      Jobcard: ${escapeHtml(jobcardNo)}
+    </div>`;
+}
+
 /* PDF Download — Portrait, kam margin, poori page width, aur har Labour
    ka block bin-packing se lagta hai (jitna fit ho jaaye usi page pe,
    block bich me nahi kategi — agar fit nahi hua to agle page pe jaayegi) */
@@ -816,19 +863,23 @@ async function downloadLabourProfileReportPDF(){
   const MAX_ROWS_PER_CHUNK = 26; // Bahut lambi history ho to Labour ka block isse bade chunks me tootega
   const chunks = [lpTitlePdfHtml(lpLastReport.blocks.length, lpRangeLabel(lpLastReport.fromDate, lpLastReport.toDate), lpLastReport.statusFilter)];
 
-  lpLastReport.blocks.forEach(b => {
-    if(b.rows.length <= MAX_ROWS_PER_CHUNK){
-      chunks.push(labourProfileBlockPdfHtml({ ...b, partLabel: "" }));
-    } else {
-      const total = Math.ceil(b.rows.length / MAX_ROWS_PER_CHUNK);
-      for(let i = 0; i < total; i++){
-        chunks.push(labourProfileBlockPdfHtml({
-          ...b,
-          rows: b.rows.slice(i * MAX_ROWS_PER_CHUNK, (i + 1) * MAX_ROWS_PER_CHUNK),
-          partLabel: ` (Part ${i + 1}/${total})`
-        }));
+  const groups = groupBlocksByJobcard(lpLastReport.blocks);
+  groups.forEach(g => {
+    chunks.push(jcGroupHeaderPdfHtml(g.jobcardNo));
+    g.members.forEach(b => {
+      if(b.rows.length <= MAX_ROWS_PER_CHUNK){
+        chunks.push(labourProfileBlockPdfHtml({ ...b, partLabel: "" }));
+      } else {
+        const total = Math.ceil(b.rows.length / MAX_ROWS_PER_CHUNK);
+        for(let i = 0; i < total; i++){
+          chunks.push(labourProfileBlockPdfHtml({
+            ...b,
+            rows: b.rows.slice(i * MAX_ROWS_PER_CHUNK, (i + 1) * MAX_ROWS_PER_CHUNK),
+            partLabel: ` (Part ${i + 1}/${total})`
+          }));
+        }
       }
-    }
+    });
   });
   chunks.push(lpFooterPdfHtml());
 
@@ -2655,10 +2706,12 @@ async function downloadReportPDF(){
 }
 
 /* ================================================================
-   TAB 6: NREGA FORM 10 — UPDATED: Show All + Select All
+   TAB 6: NREGA FORM 10 — UPDATED: Show All + Select All + Hajri Filter
 ================================================================ */
 let nregaSelected = new Set();
 let nregaShowAll = false;  // Naya variable
+let nregaFilterMode = null;  // "gt" (isse zyada) ya "lt" (isse kam)
+let nregaFilterVal = null;
 
 function renderNregaSearch(){
   const term = ($("nregaSearch").value || "").trim().toLowerCase();
@@ -2672,22 +2725,54 @@ function renderNregaSearch(){
     );
   }
 
+  // Hajri (Din Hue) ke hisaab se "Isse Zyada"/"Isse Kam" filter
+  if(nregaFilterMode && nregaFilterVal !== null && !isNaN(nregaFilterVal)){
+    results = results.filter(l => {
+      const hue = getLabourDinHue(l.id);
+      return nregaFilterMode === "gt" ? hue > nregaFilterVal : hue < nregaFilterVal;
+    });
+  }
+
   if(!results.length){
-    box.innerHTML = `<div class="empty">Koi Active Labour nahi mila.</div>`;
+    box.innerHTML = `<div class="empty">Is filter me koi Active Labour nahi mila.</div>`;
     $("nregaSelectAll").checked = false;
+    updateNregaSelectedCount();
     return;
   }
 
-  box.innerHTML = results.map(l => `
+  box.innerHTML = results.map(l => {
+    const hue = getLabourDinHue(l.id);
+    const baaki = getJobcardBaaki(l.jobcardNo);
+    return `
     <div class="chk-item">
       <input type="checkbox" class="nrega-chk" value="${l.id}" ${nregaSelected.has(l.id) ? "checked" : ""} onchange="toggleNregaSelect('${l.id}', this.checked)">
       <div style="flex:1">${escapeHtml(l.name)} <span style="font-size:12px;color:var(--muted)">(Jobcard: ${escapeHtml(l.jobcardNo)})</span></div>
+      <div style="font-size:11px;color:var(--muted);text-align:right;line-height:1.5">Hue: <b style="color:var(--green-dark)">${hue}</b><br>Baaki: <b style="color:#b05e0d">${baaki}</b></div>
     </div>
-  `).join("");
+  `;
+  }).join("");
 
   $("nregaSelectAll").checked = results.every(l => nregaSelected.has(l.id));
   updateNregaSelectedCount();
   buildNregaFormTable(); // live preview — select karte hi Form 10 me naam aa jayenge
+}
+
+// "Isse Zyada"/"Isse Kam" + number laga kar list filter karta hai —
+// Selection (nregaSelected) filter badalne se bilkul nahi hatta
+function applyNregaFilter(){
+  const mode = $("nregaFilterMode") ? $("nregaFilterMode").value : "gt";
+  const val = $("nregaFilterVal") ? parseFloat($("nregaFilterVal").value) : NaN;
+  if(isNaN(val)){ toast("Pehle koi number daalein", "error"); return; }
+  nregaFilterMode = mode;
+  nregaFilterVal = val;
+  renderNregaSearch();
+}
+
+function clearNregaFilter(){
+  nregaFilterMode = null;
+  nregaFilterVal = null;
+  if($("nregaFilterVal")) $("nregaFilterVal").value = "";
+  renderNregaSearch();
 }
 
 function toggleNregaSelect(id, checked){
