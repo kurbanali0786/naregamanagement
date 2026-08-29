@@ -137,6 +137,27 @@ function toast(message, type){
   setTimeout(() => el.remove(), 3000);
 }
 
+/* PDF ko ya to seedha Download karta hai ya WhatsApp/Share sheet khol deta
+   hai (mode="share") — jis device/browser me Share support nahi, wahan
+   apne aap normal Download ho jaata hai (koi PDF khoyega nahi) */
+async function finalizePdf(pdf, filename, mode){
+  if(mode === "share"){
+    try{
+      const blob = pdf.output("blob");
+      const file = new File([blob], filename, { type: "application/pdf" });
+      if(navigator.canShare && navigator.canShare({ files: [file] })){
+        await navigator.share({ files: [file], title: filename });
+        return;
+      }
+    }catch(err){
+      if(err && err.name === "AbortError") return; // User ne Share cancel kar diya
+      console.error("Share error:", err);
+    }
+    toast("Is device/browser me seedha WhatsApp Share support nahi hai — PDF Download ho gaya, WhatsApp me manually attach kar dein", "info");
+  }
+  pdf.save(filename);
+}
+
 /* ---------------------------------------------------------------
    CUSTOM CONFIRM / PROMPT MODAL
 --------------------------------------------------------------- */
@@ -528,6 +549,14 @@ function renderDashboard(){
     }
   });
 
+  const warnBox = $("dashboardWarning");
+  if(warnBox){
+    const lowCount = countLowBaakiJobcards();
+    warnBox.innerHTML = lowCount > 0
+      ? `<div class="warn-banner"><span class="n">${lowCount}</span><div>Jobcard aise hain jinke <b>${JOBCARD_LOW_WARNING} Din se kam Baaki</b> hain (Financial Year ${getCurrentFYLabel()}) — inka Form 10 jaldi nikalwa lein.</div></div>`
+      : "";
+  }
+
   box.innerHTML = `
     <div class="sum-card"><div class="v">${totalLabour}</div><div class="l">Total Labour</div></div>
     <div class="sum-card"><div class="v">${activeLabour}</div><div class="l">Active Labour</div></div>
@@ -551,15 +580,33 @@ let lpSelected = new Set();   // selected Labour id's — khaali = "Sabhi Labour
 let lpLastReport = [];        // Generate ke baad ka result — Print/PDF isi ko use karte hain
 
 const JOBCARD_DIN_LIMIT = 125; // Har Jobcard pe (1 ya 2+ naam) itni Hajri milti hai (sab naamon ke saath)
+const JOBCARD_LOW_WARNING = 16; // Isse kam Baaki ho to ⚠️ Warning dikhegi (Form 10 me min 10-16 din chahiye)
 
-// Ek Labour ke ab tak ke Kul Din (sabhi Demand jod ke)
+// NREGA Financial Year: 1 April se 31 March — 125 Din ka hisaab har naye
+// Financial Year me apne aap 0 se shuru ho jaata hai (purane saal ka carry nahi hota)
+function getCurrentFYRange(){
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1; // 1-12
+  const startYear = m >= 4 ? y : y - 1;
+  return { start: `${startYear}-04-01`, end: `${startYear + 1}-03-31` };
+}
+
+function getCurrentFYLabel(){
+  const { start } = getCurrentFYRange();
+  const startYear = parseInt(start.slice(0, 4), 10);
+  return `${startYear}-${String(startYear + 1).slice(2)}`;
+}
+
+// Ek Labour ke IS Financial Year ke Kul Din (sabhi Demand jod ke)
 function getLabourDinHue(labourId){
+  const { start, end } = getCurrentFYRange();
   return DATA.demands
-    .filter(d => d.labourId === labourId)
+    .filter(d => d.labourId === labourId && d.date >= start && d.date <= end)
     .reduce((sum, d) => sum + (Number(d.kulDin) || 0), 0);
 }
 
-// Ek Jobcard Number pe (jitne bhi naam us par hain) sabke Din jod kar
+// Ek Jobcard Number pe (jitne bhi naam us par hain) sabke Din jod kar — is Financial Year ke
 function getJobcardDinHue(jobcardNo){
   const ids = DATA.labours.filter(l => l.jobcardNo === jobcardNo).map(l => l.id);
   return ids.reduce((sum, id) => sum + getLabourDinHue(id), 0);
@@ -568,6 +615,18 @@ function getJobcardDinHue(jobcardNo){
 // Us Jobcard ke 125 me se kitne Din abhi baaki hain (sabhi naam milakar — saanjha)
 function getJobcardBaaki(jobcardNo){
   return Math.max(0, JOBCARD_DIN_LIMIT - getJobcardDinHue(jobcardNo));
+}
+
+// Kitne (Active Labour ke) Jobcard "Low Warning" me hain (Baaki < 16) — Dashboard card ke liye
+function countLowBaakiJobcards(){
+  const seen = new Set();
+  let count = 0;
+  DATA.labours.filter(l => l.status === "Active").forEach(l => {
+    if(seen.has(l.jobcardNo)) return;
+    seen.add(l.jobcardNo);
+    if(getJobcardBaaki(l.jobcardNo) < JOBCARD_LOW_WARNING) count++;
+  });
+  return count;
 }
 
 function renderLabourProfileList(){
@@ -853,7 +912,8 @@ function jcGroupHeaderPdfHtml(jobcardNo){
 /* PDF Download — Portrait, kam margin, poori page width, aur har Labour
    ka block bin-packing se lagta hai (jitna fit ho jaaye usi page pe,
    block bich me nahi kategi — agar fit nahi hua to agle page pe jaayegi) */
-async function downloadLabourProfileReportPDF(){
+async function downloadLabourProfileReportPDF(mode){
+  mode = mode || "download";
   if(!lpLastReport.blocks || !lpLastReport.blocks.length){ toast("Pehle Generate karein", "error"); return; }
   if(typeof window.jspdf === "undefined" || typeof html2canvas === "undefined"){
     toast("PDF library load nahi hui — Internet check karke dobara try karein", "error"); return;
@@ -925,13 +985,15 @@ async function downloadLabourProfileReportPDF(){
       }
     } finally { document.body.removeChild(container); }
 
-    pdf.save(`Labour_Report_${todayISO()}.pdf`);
-    toast("PDF Download ho gaya");
+    await finalizePdf(pdf, `Labour_Report_${todayISO()}.pdf`, mode);
+    if(mode !== "share") toast("PDF Download ho gaya");
   }catch(err){
     console.error("Labour Profile Report PDF error:", err);
     toast("PDF banane me dikkat hui, dobara try karein", "error");
   }
 }
+
+function shareLabourProfileReportPDF(){ downloadLabourProfileReportPDF("share"); }
 
 /* ================================================================
    💾 DATA BACKUP / RESTORE (JSON)
@@ -2662,7 +2724,8 @@ function reportPrintDocHtml(pageRows, dateLabel, pageNum, totalPages, startIndex
     </div>`;
 }
 
-async function downloadReportPDF(){
+async function downloadReportPDF(mode){
+  mode = mode || "download";
   const rows = getReportRowsData();
   if(!rows.length){ toast("Pehle Report Generate karein", "error"); return; }
   if(typeof window.jspdf === "undefined" || typeof html2canvas === "undefined"){
@@ -2697,13 +2760,15 @@ async function downloadReportPDF(){
         pdf.addImage(canvas.toDataURL("image/png", 1.0), "PNG", margin, margin, imgWidth, imgHeight);
       }
     } finally { document.body.removeChild(container); }
-    pdf.save(`Report_${date || "All"}_${todayISO()}.pdf`);
-    toast("PDF Download ho gaya");
+    await finalizePdf(pdf, `Report_${date || "All"}_${todayISO()}.pdf`, mode);
+    if(mode !== "share") toast("PDF Download ho gaya");
   }catch(err){
     console.error("Report PDF error:", err);
     toast("PDF banane me dikkat hui, dobara try karein", "error");
   }
 }
+
+function shareReportPDF(){ downloadReportPDF("share"); }
 
 /* ================================================================
    TAB 6: NREGA FORM 10 — UPDATED: Show All + Select All + Hajri Filter
@@ -2743,11 +2808,12 @@ function renderNregaSearch(){
   box.innerHTML = results.map(l => {
     const hue = getLabourDinHue(l.id);
     const baaki = getJobcardBaaki(l.jobcardNo);
+    const low = baaki < JOBCARD_LOW_WARNING;
     return `
     <div class="chk-item">
       <input type="checkbox" class="nrega-chk" value="${l.id}" ${nregaSelected.has(l.id) ? "checked" : ""} onchange="toggleNregaSelect('${l.id}', this.checked)">
-      <div style="flex:1">${escapeHtml(l.name)} <span style="font-size:12px;color:var(--muted)">(Jobcard: ${escapeHtml(l.jobcardNo)})</span></div>
-      <div style="font-size:11px;color:var(--muted);text-align:right;line-height:1.5">Hue: <b style="color:var(--green-dark)">${hue}</b><br>Baaki: <b style="color:#b05e0d">${baaki}</b></div>
+      <div style="flex:1">${escapeHtml(l.name)} <span style="font-size:12px;color:var(--muted)">(Jobcard: ${escapeHtml(l.jobcardNo)})</span>${low ? ' <span class="badge" style="background:#ffe4b3;color:#8a5300">⚠️ Kam Din</span>' : ""}</div>
+      <div style="font-size:11px;color:var(--muted);text-align:right;line-height:1.5">Hue: <b style="color:var(--green-dark)">${hue}</b><br>Baaki: <b style="color:${low ? "#c0392b" : "#b05e0d"}">${baaki}</b></div>
     </div>
   `;
   }).join("");
@@ -2911,7 +2977,8 @@ async function renderNregaPdfPages(pdf, rows, marginMM, pageWidthMM, pageHeightM
   }
 }
 
-async function downloadNregaPDF(){
+async function downloadNregaPDF(mode){
+  mode = mode || "download";
   if(!nregaSelected.size){ toast("Pehle kam se kam ek Labour select karein", "error"); return; }
   const { rows, skipped } = buildNregaFormTable();
   if(!rows.length){
@@ -2932,13 +2999,15 @@ async function downloadNregaPDF(){
 
     await renderNregaPdfPages(pdf, rows, 10, pageWidth, pageHeight);
 
-    pdf.save(`NREGA_Form10_${todayISO()}.pdf`);
-    toast(skipped > 0 ? `PDF Download ho gaya (${skipped} non-Active Labour skip kiye gaye)` : "PDF Download ho gaya");
+    await finalizePdf(pdf, `NREGA_Form10_${todayISO()}.pdf`, mode);
+    if(mode !== "share") toast(skipped > 0 ? `PDF Download ho gaya (${skipped} non-Active Labour skip kiye gaye)` : "PDF Download ho gaya");
   } catch(err){
     console.error("PDF banane me error:", err);
     toast("PDF banane me dikkat hui, dobara try karein", "error");
   }
 }
+
+function shareNregaPDF(){ downloadNregaPDF("share"); }
 
 /* ================================================================
    BOOT

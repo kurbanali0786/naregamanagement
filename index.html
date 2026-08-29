@@ -187,6 +187,8 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
 .lp-summary b{color:var(--green-dark)}
 .jc-group{border:1.5px solid var(--green-light);border-radius:10px;overflow:hidden;margin-top:12px}
 .jc-group-head{background:linear-gradient(135deg,var(--green-dark),var(--green));color:#fff;padding:9px 13px;font-size:12.5px;font-weight:700}
+.warn-banner{background:linear-gradient(135deg,#fff4e0,#ffe9c4);border:1.5px solid #f0c887;border-radius:10px;padding:11px 13px;font-size:12.5px;color:#7a4e08;margin-top:10px;display:flex;align-items:center;gap:10px}
+.warn-banner .n{font-size:20px;font-weight:800}
 .jc-group .lp-block{border-top:1px solid #eef2ee;border-radius:0}
 .quick-range{display:flex;gap:6px;flex-wrap:wrap}
 .quick-range button{padding:6px 12px;font-size:12px}
@@ -291,6 +293,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
         <div class="row mt">
           <button class="btn btn-gray btn-sm" onclick="manualRefresh('dashboard')">🔄 Refresh</button>
         </div>
+        <div id="dashboardWarning"></div>
         <div class="summary-grid mt" id="dashboardSummary"></div>
       </div>
 
@@ -331,6 +334,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
           <button class="btn btn-green" onclick="generateLabourProfileReport()">📊 Generate</button>
           <button class="btn btn-blue btn-sm" onclick="printLabourProfileReport()">🖨️ Print</button>
           <button class="btn btn-orange btn-sm" onclick="downloadLabourProfileReportPDF()">⬇️ PDF Download</button>
+          <button class="btn btn-sm" style="background:#25D366;color:#fff" onclick="shareLabourProfileReportPDF()">📲 WhatsApp Share</button>
         </div>
         <div id="labourProfileBox" class="mt"></div>
       </div>
@@ -562,6 +566,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
         <div class="row mt">
           <button class="btn btn-blue btn-sm" onclick="printReport()">🖨️ Print</button>
           <button class="btn btn-orange btn-sm" onclick="downloadReportPDF()">⬇️ PDF Download</button>
+          <button class="btn btn-sm" style="background:#25D366;color:#fff" onclick="shareReportPDF()">📲 WhatsApp Share</button>
         </div>
       </div>
 
@@ -604,6 +609,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
         <div class="chk-list" id="nregaSearchList"></div>
         <div class="row mt">
           <button class="btn btn-orange" onclick="downloadNregaPDF()">⬇️ PDF Download</button>
+          <button class="btn" style="background:#25D366;color:#fff" onclick="shareNregaPDF()">📲 WhatsApp Share</button>
           <button class="btn btn-outline btn-sm" id="btnToggleNregaPreview" onclick="toggleCollapse('nregaPrintArea', this, '👁️ Preview Dikhayein', '🙈 Preview Chhupayein')">👁️ Preview Dikhayein</button>
         </div>
         <p style="font-size:12px;color:var(--muted);margin-top:6px">ℹ️ Labour select karte hi neeche Form 10 ka <b>live preview</b> ban jayega — phir ⬇️ PDF Download se seedha PDF mil jayega.</p>
@@ -690,7 +696,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   }
 </script>
-<script src="app.js?v=26"></script>
+<script src="app.js?v=27"></script>
 <script>
 /* Agar app.js load hi na ho (404 / internet / purani cache) to Login button "dead" lagta hai —
    user ko saaf message dikhao ki asli problem kya hai */
