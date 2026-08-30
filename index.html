@@ -515,7 +515,11 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
         <h3>⏳ Payment Pending <span style="font-size:12.5px;color:var(--muted);font-weight:400">(Khaali Comment)</span></h3>
         <button class="btn btn-outline btn-sm acc-btn" data-show="⏳ Payment Pending Dikhayein" data-hide="🙈 Payment Pending Chhupayein" onclick="toggleAcc('paymentPendingBox', this)">⏳ Payment Pending Dikhayein</button>
         <div class="collapsible acc-item" id="paymentPendingBox">
-          <p style="font-size:12px;color:var(--muted);margin:8px 0">Jin Demand ka Comment khaali hai (Payment clear nahi hua), wo Labour-wise group ho kar aati hain — har Labour ka apna total, neeche sabka Bulk Total.</p>
+          <p style="font-size:12px;color:var(--muted);margin:8px 0">Jin Demand ka payment <b>Credit ho chuka hai</b> lekin Comment abhi bhi khaali hai (Pending waalon ka comment khaali hona normal hai, wo yahan nahi aate) — Labour-wise group ho kar aati hain.</p>
+          <div class="row">
+            <button class="btn btn-orange btn-sm" onclick="downloadPaymentPendingPDF()">⬇️ PDF Download</button>
+            <button class="btn btn-sm" style="background:#25D366;color:#fff" onclick="sharePaymentPendingPDF()">📲 WhatsApp Share</button>
+          </div>
           <div id="paymentPendingList" class="mt"></div>
         </div>
       </div>
@@ -727,7 +731,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   }
 </script>
-<script src="app.js?v=28"></script>
+<script src="app.js?v=29"></script>
 <script>
 /* Agar app.js load hi na ho (404 / internet / purani cache) to Login button "dead" lagta hai —
    user ko saaf message dikhao ki asli problem kya hai */

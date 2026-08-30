@@ -553,7 +553,8 @@ function renderDashboard(){
   if(warnBox){
     const lowCount = countLowBaakiJobcards();
     warnBox.innerHTML = lowCount > 0
-      ? `<div class="warn-banner"><span class="n">${lowCount}</span><div>Jobcard aise hain jinke <b>${JOBCARD_LOW_WARNING} Din se kam Baaki</b> hain (Financial Year ${getCurrentFYLabel()}) — inka Form 10 jaldi nikalwa lein.</div></div>`
+      ? `<div class="warn-banner" style="cursor:pointer" onclick="toggleLowJobcardDetails()"><span class="n">${lowCount}</span><div>Jobcard aise hain jinke <b>${JOBCARD_LOW_WARNING} Din se kam Baaki</b> hain (Financial Year ${getCurrentFYLabel()}) — inka Form 10 jaldi nikalwa lein. <span style="text-decoration:underline">(dekhne ke liye click karein)</span></div></div>
+         <div id="lowJobcardDetails" class="hidden" style="border:1px solid var(--border);border-radius:8px;margin-top:6px;padding:4px 10px;background:#fff"></div>`
       : "";
   }
 
@@ -619,14 +620,36 @@ function getJobcardBaaki(jobcardNo){
 
 // Kitne (Active Labour ke) Jobcard "Low Warning" me hain (Baaki < 16) — Dashboard card ke liye
 function countLowBaakiJobcards(){
+  return getLowBaakiJobcardsList().length;
+}
+
+// Warning wale Jobcard ki poori list (naam + baaki din) — click karke dikhane ke liye
+function getLowBaakiJobcardsList(){
   const seen = new Set();
-  let count = 0;
+  const result = [];
   DATA.labours.filter(l => l.status === "Active").forEach(l => {
     if(seen.has(l.jobcardNo)) return;
     seen.add(l.jobcardNo);
-    if(getJobcardBaaki(l.jobcardNo) < JOBCARD_LOW_WARNING) count++;
+    const baaki = getJobcardBaaki(l.jobcardNo);
+    if(baaki < JOBCARD_LOW_WARNING){
+      const names = DATA.labours.filter(x => x.jobcardNo === l.jobcardNo).map(x => x.name);
+      result.push({ jobcardNo: l.jobcardNo, names, baaki });
+    }
   });
-  return count;
+  return result.sort((a, b) => a.baaki - b.baaki);
+}
+
+function toggleLowJobcardDetails(){
+  const el = $("lowJobcardDetails");
+  if(!el) return;
+  if(el.classList.contains("hidden")){
+    el.innerHTML = getLowBaakiJobcardsList().map(x => `
+      <div class="dd-item"><span>${escapeHtml(x.jobcardNo)} — ${escapeHtml(x.names.join(", "))}</span><span><b>${x.baaki}</b> Din Baaki</span></div>
+    `).join("");
+    el.classList.remove("hidden");
+  } else {
+    el.classList.add("hidden");
+  }
 }
 
 function renderLabourProfileList(){
@@ -794,7 +817,7 @@ function labourProfileBlockHtml(b){
                 <td style="text-align:center">₹${r.amount}</td>
                 <td style="text-align:center"><span class="badge ${r.status.toLowerCase()}">${r.status}</span></td>
                 <td style="text-align:center">${r.creditedDate ? fmtDate(r.creditedDate) : "—"}</td>
-                <td style="text-align:center">${r.comment ? escapeHtml(r.comment) : '<span class="badge pending">⚠️ Baaki Hai</span>'}</td>
+                <td style="text-align:center">${r.comment ? escapeHtml(r.comment) : (r.status === "Credited" ? '<span class="badge pending">⚠️ Baaki Hai</span>' : "—")}</td>
               </tr>
             `).join("")}
           </tbody>
@@ -877,7 +900,7 @@ function labourProfileBlockPdfHtml(b){
               <td style="border:1px solid #000;padding:4px;text-align:center">₹${r.amount}</td>
               <td style="border:1px solid #000;padding:4px;text-align:center">${r.status}</td>
               <td style="border:1px solid #000;padding:4px;text-align:center">${r.creditedDate ? fmtDate(r.creditedDate) : "—"}</td>
-              <td style="border:1px solid #000;padding:4px;text-align:center">${r.comment ? escapeHtml(r.comment) : "⚠️ Baaki Hai"}</td>
+              <td style="border:1px solid #000;padding:4px;text-align:center">${r.comment ? escapeHtml(r.comment) : (r.status === "Credited" ? "⚠️ Baaki Hai" : "—")}</td>
             </tr>
           `).join("")}
         </tbody>
@@ -2315,34 +2338,115 @@ function toggleDemandDate(i){
   if(el) el.classList.toggle("open");
 }
 
-// Jin Demand ka Comment khaali hai (Payment clear nahi hua) — Labour-wise
-// group karke dikhata hai, har Labour ka apna total + sabka Bulk Total
-function renderPaymentPending(){
-  const box = $("paymentPendingList");
-  if(!box) return;
-  const pending = DATA.demands.filter(d => !(d.comment && String(d.comment).trim()));
-  if(!pending.length){ box.innerHTML = `<div class="empty">Koi Pending nahi mila — sabke Comment bhare hue hain. 🎉</div>`; return; }
+// Jin Demand ka payment CREDIT ho chuka hai lekin Comment abhi bhi khaali hai
+// (matlab paisa bank se aa gaya, par Labour ko mila ya nahi confirm nahi hai) —
+// Pending (abhi Credit hi nahi hua) waalon ka comment khaali hona to normal hai,
+// unhe yahan nahi dikhaya jaata
+// Data taiyar karta hai (screen render aur PDF dono isi ko use karte hain)
+function getPaymentPendingData(){
+  const pending = DATA.demands.filter(d => {
+    const hasComment = d.comment && String(d.comment).trim();
+    if(hasComment) return false;
+    const ac = DATA.acCredits.find(x => x.date === d.date && x.labourId === d.labourId);
+    return ac && ac.status === "Credited";
+  });
 
   const byLabour = {};
   pending.forEach(d => { if(!byLabour[d.labourId]) byLabour[d.labourId] = []; byLabour[d.labourId].push(d); });
 
   let bulkTotal = 0, bulkCount = 0;
-  let html = Object.keys(byLabour).map(labourId => {
+  const groups = Object.keys(byLabour).map(labourId => {
     const l = DATA.labours.find(x => x.id === labourId) || {};
     let total = 0;
-    const itemsHtml = byLabour[labourId].slice().sort((a, b) => a.date.localeCompare(b.date)).map(d => {
+    const items = byLabour[labourId].slice().sort((a, b) => a.date.localeCompare(b.date)).map(d => {
       const p = DATA.payments.find(x => x.date === d.date && x.labourId === labourId);
       const amt = p ? (p.amount || 0) : 0;
       total += amt; bulkCount++;
-      return `<div class="pp-item"><span>${fmtDate(d.date)} · ${d.kulDin || 0} Din</span><span>₹${amt.toFixed(2)}</span></div>`;
-    }).join("");
+      return { date: d.date, kulDin: d.kulDin || 0, amt };
+    });
     bulkTotal += total;
-    return `<div class="pp-block"><div class="pp-head"><span>${escapeHtml(l.name || "—")}</span><span>₹${total.toFixed(2)}</span></div>${itemsHtml}</div>`;
-  }).join("");
+    return { labour: l, items, total };
+  });
+
+  return { groups, bulkTotal, bulkCount };
+}
+
+function renderPaymentPending(){
+  const box = $("paymentPendingList");
+  if(!box) return;
+  const { groups, bulkTotal, bulkCount } = getPaymentPendingData();
+
+  if(!groups.length){ box.innerHTML = `<div class="empty">Koi Pending nahi mila — Credited entries ke Comment bhare hue hain. 🎉</div>`; return; }
+
+  let html = groups.map(g => `
+    <div class="pp-block">
+      <div class="pp-head"><span>${escapeHtml(g.labour.name || "—")}</span><span>₹${g.total.toFixed(2)}</span></div>
+      ${g.items.map(i => `<div class="pp-item"><span>${fmtDate(i.date)} · ${i.kulDin} Din</span><span>₹${i.amt.toFixed(2)}</span></div>`).join("")}
+    </div>
+  `).join("");
 
   html += `<div class="pp-bulk"><div class="v">₹${bulkTotal.toFixed(2)}</div><div style="font-size:11px">Bulk Pending Total — ${bulkCount} Entries</div></div>`;
   box.innerHTML = html;
 }
+
+// Payment Pending list ka Print-friendly HTML (PDF ke liye)
+function paymentPendingPdfHtml(groups, bulkTotal, bulkCount){
+  return `
+    <div style="font-family:'Hind',Arial,sans-serif;color:#000;background:#fff;padding:8px;border:1px solid #000">
+      <h2 style="text-align:center;font-size:15px;margin:0 0 4px">⏳ Payment Pending — Khaali Comment (Credited)</h2>
+      <p style="text-align:center;font-size:10px;margin:0 0 8px">Labour Job Card System — ${fmtDate(todayISO())}</p>
+      ${groups.map(g => `
+        <div style="margin-bottom:8px;border:1px solid #000">
+          <div style="background:#f0f0f0;padding:5px 8px;font-size:11.5px;font-weight:700;display:flex;justify-content:space-between">
+            <span>${escapeHtml(g.labour.name || "—")}</span><span>₹${g.total.toFixed(2)}</span>
+          </div>
+          <table style="width:100%;border-collapse:collapse;font-size:10.5px">
+            <thead><tr><th style="border:1px solid #000;padding:3px">Date</th><th style="border:1px solid #000;padding:3px">Din</th><th style="border:1px solid #000;padding:3px">Amount ₹</th></tr></thead>
+            <tbody>${g.items.map(i => `<tr><td style="border:1px solid #000;padding:3px;text-align:center">${fmtDate(i.date)}</td><td style="border:1px solid #000;padding:3px;text-align:center">${i.kulDin}</td><td style="border:1px solid #000;padding:3px;text-align:center">${i.amt.toFixed(2)}</td></tr>`).join("")}</tbody>
+          </table>
+        </div>
+      `).join("")}
+      <div style="background:#9c3b2e;color:#fff;text-align:center;padding:8px;border-radius:6px;margin-top:6px">
+        <div style="font-size:15px;font-weight:700">₹${bulkTotal.toFixed(2)}</div>
+        <div style="font-size:10.5px">Bulk Pending Total — ${bulkCount} Entries</div>
+      </div>
+      <p style="text-align:right;font-size:9.5px;color:#444;margin-top:8px;border-top:1px solid #999;padding-top:4px">Developed by Kurban Ali</p>
+    </div>`;
+}
+
+async function downloadPaymentPendingPDF(mode){
+  mode = mode || "download";
+  const { groups, bulkTotal, bulkCount } = getPaymentPendingData();
+  if(!groups.length){ toast("Abhi koi Payment Pending nahi hai", "error"); return; }
+  if(typeof window.jspdf === "undefined" || typeof html2canvas === "undefined"){
+    toast("PDF library load nahi hui — Internet check karke dobara try karein", "error"); return;
+  }
+  toast("PDF taiyar ho raha hai...", "info");
+  try{
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF("p", "mm", "a4");
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const margin = 4;
+    const container = document.createElement("div");
+    container.style.cssText = "position:fixed;left:-10000px;top:0;width:700px;background:#fff";
+    document.body.appendChild(container);
+    try{
+      container.innerHTML = paymentPendingPdfHtml(groups, bulkTotal, bulkCount);
+      await new Promise(r => setTimeout(r, 60));
+      const canvas = await html2canvas(container.firstElementChild, { scale: 2, backgroundColor: "#ffffff", logging: false });
+      if(!canvas || !canvas.width) throw new Error("blank canvas");
+      const imgWidth = pageWidth - margin * 2;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      pdf.addImage(canvas.toDataURL("image/png", 1.0), "PNG", margin, margin, imgWidth, imgHeight);
+    } finally { document.body.removeChild(container); }
+    await finalizePdf(pdf, `Payment_Pending_${todayISO()}.pdf`, mode);
+    if(mode !== "share") toast("PDF Download ho gaya");
+  }catch(err){
+    console.error("Payment Pending PDF error:", err);
+    toast("PDF banane me dikkat hui, dobara try karein", "error");
+  }
+}
+function sharePaymentPendingPDF(){ downloadPaymentPendingPDF("share"); }
 
 function renderDemands(){
   const filterDate = $("demandFilterDate").value;
