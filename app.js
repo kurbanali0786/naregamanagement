@@ -722,7 +722,8 @@ function getLabourProfileRows(labourId, fromDate, toDate, statusFilter){
     const amount = p ? (p.amount || 0) : 0;
     return {
       date: d.date, kulDin: d.kulDin ?? "", pratidin: d.pratidin ?? "",
-      amount, status, creditedDate: ac && ac.creditedDate ? ac.creditedDate : ""
+      amount, status, creditedDate: ac && ac.creditedDate ? ac.creditedDate : "",
+      comment: d.comment ? String(d.comment).trim() : ""
     };
   });
 
@@ -783,7 +784,7 @@ function labourProfileBlockHtml(b){
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Date</th><th>Din</th><th>Dar</th><th>Payment ₹</th><th>Status</th><th>Credited Date</th></tr></thead>
+          <thead><tr><th>Date</th><th>Din</th><th>Dar</th><th>Payment ₹</th><th>Status</th><th>Credited Date</th><th>Comment</th></tr></thead>
           <tbody>
             ${b.rows.map(r => `
               <tr>
@@ -793,6 +794,7 @@ function labourProfileBlockHtml(b){
                 <td style="text-align:center">₹${r.amount}</td>
                 <td style="text-align:center"><span class="badge ${r.status.toLowerCase()}">${r.status}</span></td>
                 <td style="text-align:center">${r.creditedDate ? fmtDate(r.creditedDate) : "—"}</td>
+                <td style="text-align:center">${r.comment ? escapeHtml(r.comment) : '<span class="badge pending">⚠️ Baaki Hai</span>'}</td>
               </tr>
             `).join("")}
           </tbody>
@@ -864,6 +866,7 @@ function labourProfileBlockPdfHtml(b){
           <th style="border:1px solid #000;padding:4px;background:#f0f0f0">Payment ₹</th>
           <th style="border:1px solid #000;padding:4px;background:#f0f0f0">Status</th>
           <th style="border:1px solid #000;padding:4px;background:#f0f0f0">Credited Date</th>
+          <th style="border:1px solid #000;padding:4px;background:#f0f0f0">Comment</th>
         </tr></thead>
         <tbody>
           ${b.rows.map(r => `
@@ -874,6 +877,7 @@ function labourProfileBlockPdfHtml(b){
               <td style="border:1px solid #000;padding:4px;text-align:center">₹${r.amount}</td>
               <td style="border:1px solid #000;padding:4px;text-align:center">${r.status}</td>
               <td style="border:1px solid #000;padding:4px;text-align:center">${r.creditedDate ? fmtDate(r.creditedDate) : "—"}</td>
+              <td style="border:1px solid #000;padding:4px;text-align:center">${r.comment ? escapeHtml(r.comment) : "⚠️ Baaki Hai"}</td>
             </tr>
           `).join("")}
         </tbody>
@@ -2279,6 +2283,67 @@ function bulkApplyComment(){
   toast(checked.length + " Demand pe comment lag gaya", "success");
 }
 
+// Sabhi Demand Dates ki list — click karke us din ka data khulta/band hota hai
+function renderDemandDates(){
+  const box = $("demandDatesList");
+  if(!box) return;
+  const dates = [...new Set(DATA.demands.map(d => d.date))].sort().reverse();
+  if(!dates.length){ box.innerHTML = `<div class="empty">Koi Demand nahi hai.</div>`; return; }
+
+  box.innerHTML = dates.map((dt, i) => {
+    const entries = DATA.demands.filter(d => d.date === dt);
+    const itemsHtml = entries.map(e => {
+      const l = DATA.labours.find(x => x.id === e.labourId) || {};
+      const p = DATA.payments.find(x => x.date === dt && x.labourId === e.labourId);
+      const hasComment = e.comment && String(e.comment).trim();
+      return `
+        <div class="dd-item">
+          <span>${escapeHtml(l.name || "—")} — ${e.kulDin || 0} Din</span>
+          <span>₹${p ? p.amount : 0} ${hasComment ? `<span class="badge active">${escapeHtml(e.comment)}</span>` : `<span class="badge pending">Khaali</span>`}</span>
+        </div>`;
+    }).join("");
+    return `
+      <div class="dd-date-row" onclick="toggleDemandDate(${i})">
+        <span>📅 ${fmtDate(dt)}</span><span class="dd-count">${entries.length} Labour</span>
+      </div>
+      <div class="dd-detail" id="ddDetail-${i}">${itemsHtml}</div>
+    `;
+  }).join("");
+}
+function toggleDemandDate(i){
+  const el = $("ddDetail-" + i);
+  if(el) el.classList.toggle("open");
+}
+
+// Jin Demand ka Comment khaali hai (Payment clear nahi hua) — Labour-wise
+// group karke dikhata hai, har Labour ka apna total + sabka Bulk Total
+function renderPaymentPending(){
+  const box = $("paymentPendingList");
+  if(!box) return;
+  const pending = DATA.demands.filter(d => !(d.comment && String(d.comment).trim()));
+  if(!pending.length){ box.innerHTML = `<div class="empty">Koi Pending nahi mila — sabke Comment bhare hue hain. 🎉</div>`; return; }
+
+  const byLabour = {};
+  pending.forEach(d => { if(!byLabour[d.labourId]) byLabour[d.labourId] = []; byLabour[d.labourId].push(d); });
+
+  let bulkTotal = 0, bulkCount = 0;
+  let html = Object.keys(byLabour).map(labourId => {
+    const l = DATA.labours.find(x => x.id === labourId) || {};
+    let total = 0;
+    const itemsHtml = byLabour[labourId].slice().sort((a, b) => a.date.localeCompare(b.date)).map(d => {
+      const p = DATA.payments.find(x => x.date === d.date && x.labourId === labourId);
+      const amt = p ? (p.amount || 0) : 0;
+      total += amt; bulkCount++;
+      return `<div class="pp-item"><span>${fmtDate(d.date)} · ${d.kulDin || 0} Din</span><span>₹${amt.toFixed(2)}</span></div>`;
+    }).join("");
+    bulkTotal += total;
+    return `<div class="pp-block"><div class="pp-head"><span>${escapeHtml(l.name || "—")}</span><span>₹${total.toFixed(2)}</span></div>${itemsHtml}</div>`;
+  }).join("");
+
+  html += `<div class="pp-bulk"><div class="v">₹${bulkTotal.toFixed(2)}</div><div style="font-size:11px">Bulk Pending Total — ${bulkCount} Entries</div></div>`;
+  box.innerHTML = html;
+}
+
 function renderDemands(){
   const filterDate = $("demandFilterDate").value;
   const term = ($("demandListSearch") && $("demandListSearch").value || "").trim().toLowerCase();
@@ -2327,6 +2392,8 @@ function renderDemands(){
   }).join("");
   $("demandEmpty").classList.toggle("hidden", list.length > 0);
   $("demandListSelectAll").checked = false;
+  renderDemandDates();
+  renderPaymentPending();
 }
 
 // Demand List ke inline column (Kul Din / Kul Hajri / Pratidin / Comment) — turant save
