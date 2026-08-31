@@ -302,6 +302,18 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
     <!-- ==== DASHBOARD TAB ==== -->
     <div id="panel-dashboard" class="panel active">
       <div class="card">
+        <h3>🔑 Password Set Karein</h3>
+        <p style="font-size:12.5px;color:var(--muted);margin-bottom:10px">Aapne Google se Login kiya hai. Yahan ek Password set kar lein to aage kisi bhi doosre phone/computer se seedha <b>Email + Password</b> se bhi Login ho jaayega — Google account share karne ki zaroorat nahi padegi. Data wahi purana milega.</p>
+        <div class="row">
+          <span id="pwEmailDisplay" style="font-size:12.5px;font-weight:600;color:var(--green-dark)"></span>
+        </div>
+        <div class="row">
+          <input type="password" id="pwNewPassword" class="grow" placeholder="Naya Password (kam se kam 6 letters)">
+          <input type="password" id="pwNewPassword2" class="grow" placeholder="Password dobara likhein">
+        </div>
+        <button class="btn btn-green btn-sm" onclick="setAccountPassword()">🔑 Password Set/Update Karein</button>
+      </div>
+      <div class="card">
         <h3>🏠 Quick Summary</h3>
         <div class="row mt">
           <button class="btn btn-gray btn-sm" onclick="manualRefresh('dashboard')">🔄 Refresh</button>
@@ -731,7 +743,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   }
 </script>
-<script src="app.js?v=30"></script>
+<script src="app.js?v=31"></script>
 <script>
 /* Agar app.js load hi na ho (404 / internet / purani cache) to Login button "dead" lagta hai —
    user ko saaf message dikhao ki asli problem kya hai */

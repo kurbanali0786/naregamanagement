@@ -298,6 +298,45 @@ function logout(){
   });
 }
 
+/* Google se Login kiye hue account me EK Password bhi jod (link) deta hai —
+   isse aage koi bhi doosra device Google account share kiye bina, seedha
+   Email + Password se Login kar sakta hai (data wahi purana milta hai,
+   kyunki Firebase me dono tareeke ek hi account/UID se jude rehte hain) */
+function setAccountPassword(){
+  if(!currentUser){ toast("Pehle Login karein", "error"); return; }
+  const p1 = $("pwNewPassword").value;
+  const p2 = $("pwNewPassword2").value;
+  if(!p1 || !p2){ toast("Dono Password field bharein", "error"); return; }
+  if(p1.length < 6){ toast("Password kam se kam 6 characters ka ho", "error"); return; }
+  if(p1 !== p2){ toast("Dono Password match nahi ho rahe", "error"); return; }
+
+  const email = currentUser.email;
+  if(!email){ toast("Is account ka Email nahi mila", "error"); return; }
+
+  const hasPasswordProvider = currentUser.providerData.some(p => p.providerId === "password");
+  const credential = firebase.auth.EmailAuthProvider.credential(email, p1);
+
+  const done = () => {
+    $("pwNewPassword").value = "";
+    $("pwNewPassword2").value = "";
+    toast(`Password set ho gaya! Ab kisi bhi device pe "${email}" aur ye Password daal kar Login kar sakte hain`, "success");
+  };
+
+  if(hasPasswordProvider){
+    // Pehle se Password linked hai — sirf update karo
+    currentUser.updatePassword(p1).then(done).catch(err => toast(friendlyAuthError(err), "error"));
+  } else {
+    // Naya Password link karo (Google account ke saath)
+    currentUser.linkWithCredential(credential).then(done).catch(err => {
+      if(err && err.code === "auth/provider-already-linked"){
+        currentUser.updatePassword(p1).then(done).catch(e2 => toast(friendlyAuthError(e2), "error"));
+      } else {
+        toast(friendlyAuthError(err), "error");
+      }
+    });
+  }
+}
+
 if(firebaseReady){
   // Google login Redirect mode se wapas aane par result/error pakdo
   firebase.auth().getRedirectResult().catch(err => {
@@ -312,6 +351,7 @@ firebase.auth().onAuthStateChanged(user => {
     $("authScreen").classList.add("hidden");
     $("appScreen").classList.remove("hidden");
     $("userDisplay").textContent = "👤 " + (user.email || user.displayName || "User");
+    if($("pwEmailDisplay")) $("pwEmailDisplay").textContent = user.email ? `Email: ${user.email}` : "";
 
     ["loginEmail","loginPassword","regEmail","regPassword","regPassword2"].forEach(id => {
       const el = $(id);
