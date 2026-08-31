@@ -2362,7 +2362,7 @@ function getPaymentPendingData(){
       const p = DATA.payments.find(x => x.date === d.date && x.labourId === labourId);
       const amt = p ? (p.amount || 0) : 0;
       total += amt; bulkCount++;
-      return { date: d.date, kulDin: d.kulDin || 0, amt };
+      return { demandId: d.id, date: d.date, kulDin: d.kulDin || 0, amt };
     });
     bulkTotal += total;
     return { labour: l, items, total };
@@ -2381,12 +2381,36 @@ function renderPaymentPending(){
   let html = groups.map(g => `
     <div class="pp-block">
       <div class="pp-head"><span>${escapeHtml(g.labour.name || "—")}</span><span>₹${g.total.toFixed(2)}</span></div>
-      ${g.items.map(i => `<div class="pp-item"><span>${fmtDate(i.date)} · ${i.kulDin} Din</span><span>₹${i.amt.toFixed(2)}</span></div>`).join("")}
+      ${g.items.map(i => `
+        <div class="pp-item">
+          <span>${fmtDate(i.date)} · ${i.kulDin} Din · ₹${i.amt.toFixed(2)}</span>
+          <div style="display:flex;gap:4px;align-items:center">
+            <input type="text" id="ppNote-${i.demandId}" placeholder="jaise: de diya" style="width:100px;padding:4px 6px;font-size:11px">
+            <button class="btn btn-blue btn-sm" style="padding:4px 8px" onclick="savePendingNote('${i.demandId}')">💾</button>
+          </div>
+        </div>
+      `).join("")}
     </div>
   `).join("");
 
   html += `<div class="pp-bulk"><div class="v">₹${bulkTotal.toFixed(2)}</div><div style="font-size:11px">Bulk Pending Total — ${bulkCount} Entries</div></div>`;
   box.innerHTML = html;
+}
+
+// Payment Pending list se seedha comment likh kar Save karne ke liye
+function savePendingNote(demandId){
+  const input = $("ppNote-" + demandId);
+  if(!input) return;
+  const val = input.value.trim();
+  if(!val){ toast("Kuch likhein pehle", "error"); return; }
+  const d = DATA.demands.find(x => x.id === demandId);
+  if(!d) return;
+  d.comment = val;
+  persist();
+  toast("Save ho gaya");
+  renderPaymentPending();
+  renderDemandDates();
+  renderDemands();
 }
 
 // Payment Pending list ka Print-friendly HTML (PDF ke liye)
@@ -2980,10 +3004,14 @@ function renderNregaSearch(){
     const hue = getLabourDinHue(l.id);
     const baaki = getJobcardBaaki(l.jobcardNo);
     const low = baaki < JOBCARD_LOW_WARNING;
+    const jcMembers = DATA.labours.filter(x => x.jobcardNo === l.jobcardNo && x.status === "Active");
+    const isDual = jcMembers.length > 1;
+    const isSel = nregaSelected.has(l.id);
+    const partnerSelected = isDual && !isSel && jcMembers.some(m => m.id !== l.id && nregaSelected.has(m.id));
     return `
     <div class="chk-item">
-      <input type="checkbox" class="nrega-chk" value="${l.id}" ${nregaSelected.has(l.id) ? "checked" : ""} onchange="toggleNregaSelect('${l.id}', this.checked)">
-      <div style="flex:1">${escapeHtml(l.name)} <span style="font-size:12px;color:var(--muted)">(Jobcard: ${escapeHtml(l.jobcardNo)})</span>${low ? ' <span class="badge" style="background:#ffe4b3;color:#8a5300">⚠️ Kam Din</span>' : ""}</div>
+      <input type="checkbox" class="nrega-chk" value="${l.id}" ${isSel ? "checked" : ""} onchange="toggleNregaSelect('${l.id}', this.checked)">
+      <div style="flex:1">${escapeHtml(l.name)} <span style="font-size:12px;color:var(--muted)">(Jobcard: ${escapeHtml(l.jobcardNo)})</span>${low ? ' <span class="badge" style="background:#ffe4b3;color:#8a5300">⚠️ Kam Din</span>' : ""}${partnerSelected ? ' <span class="badge" style="background:#ffe4b3;color:#8a5300">Jodidaar select, ye baaki</span>' : ""}</div>
       <div style="font-size:11px;color:var(--muted);text-align:right;line-height:1.5">Hue: <b style="color:var(--green-dark)">${hue}</b><br>Baaki: <b style="color:${low ? "#c0392b" : "#b05e0d"}">${baaki}</b></div>
     </div>
   `;
@@ -3050,15 +3078,32 @@ function toggleNregaShowAll(){
 
 function buildNregaFormTable(){
   // Form 10 me sirf ACTIVE Labour aayenge — Inactive/Completed kabhi nahi.
-  const allSelected = Array.from(nregaSelected)
+  const selectedActive = Array.from(nregaSelected)
     .map(id => DATA.labours.find(l => l.id === id))
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter(l => l.status === "Active");
 
-  const rows = allSelected
-    .filter(l => l.status === "Active")
-    .sort((a, b) => String(a.jobcardNo).localeCompare(String(b.jobcardNo)));
+  // Har Jobcard ke Active members (Dual-naam Jobcard check karne ke liye)
+  const jcActiveMembers = {};
+  DATA.labours.filter(l => l.status === "Active").forEach(l => {
+    if(!jcActiveMembers[l.jobcardNo]) jcActiveMembers[l.jobcardNo] = [];
+    jcActiveMembers[l.jobcardNo].push(l.id);
+  });
 
-  const skipped = allSelected.length - rows.length;
+  // "Series" me sirf wahi jaate hain jinke Jobcard ke SAARE (Dual ho ya Single)
+  // Active naam select ho chuke hain — baaki (adhoore-select Dual) sab
+  // "Series se bahar" — sabse last me, inka koi fix order zaroori nahi
+  const inSeries = [], outside = [];
+  selectedActive.forEach(l => {
+    const members = jcActiveMembers[l.jobcardNo] || [l.id];
+    const allMembersSelected = members.every(id => nregaSelected.has(id));
+    if(allMembersSelected) inSeries.push(l); else outside.push(l);
+  });
+  inSeries.sort((a, b) => String(a.jobcardNo).localeCompare(String(b.jobcardNo)));
+  outside.sort((a, b) => String(a.jobcardNo).localeCompare(String(b.jobcardNo)));
+
+  const rows = [...inSeries, ...outside];
+  const skipped = Array.from(nregaSelected).length - rows.length;
 
   // Sirf जॉब कार्ड नंबर + श्रमिक का नाम bharte hain — baaki column khaali (hath se bharne ke liye)
   const box = $("nregaFormTableBody");
