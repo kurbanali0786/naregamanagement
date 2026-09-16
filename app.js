@@ -51,7 +51,10 @@ let currentUser = null;
 let DATA = {
   labours: [],   // {id, jobcardNo, name, aadhar, status}
   demands: [],   // {id, date, labourId}
-  payments: [],  // {id, date, labourId, amount, mateShare, labourShare}
+  payments: [],  // {id, date, labourId, amount, mateShare, labourShare, paidAmount}
+                 // paidAmount = ab tak Labour ko haath me kitna diya (optional — Baaki
+                 // Payment / Partial Payment track karne ke liye). Agar kabhi set na
+                 // ho, purana comment-based tareeka hi chalega (backward-compatible).
   acCredits: [], // {id, date, labourId, status}
   trash: []      // {id, type: 'labour'|'demand'|'payment', data, cascade, deletedAt}
 };
@@ -622,6 +625,18 @@ let lpLastReport = [];        // Generate ke baad ka result — Print/PDF isi ko
 
 const JOBCARD_DIN_LIMIT = 125; // Har Jobcard pe (1 ya 2+ naam) itni Hajri milti hai (sab naamon ke saath)
 const JOBCARD_LOW_WARNING = 16; // Isse kam Baaki ho to ⚠️ Warning dikhegi (Form 10 me min 10-16 din chahiye)
+
+// Form 10 me Baaki Din ke hisaab se kitne Naam daalne hain — ye rule batata hai:
+//  - 10 se kam Baaki  → "warn" (jaldi Form 10 nikalwa lein, Din waste ho sakte hain)
+//  - 10 se 16 tak     → "one"  (sirf 1 Naam kaafi hai)
+//  - 16 se zyada      → "two"  (Dual-Jobcard ho to 2 Naam me baant sakte hain)
+//  - 0 ya khaali      → null  (kuch suggest karne layak nahi)
+function getJobcardNameSuggestion(baaki){
+  if(!baaki || baaki <= 0) return null;
+  if(baaki < 10) return "warn";
+  if(baaki <= JOBCARD_LOW_WARNING) return "one";
+  return "two";
+}
 
 // NREGA Financial Year: 1 April se 31 March — 125 Din ka hisaab har naye
 // Financial Year me apne aap 0 se shuru ho jaata hai (purane saal ka carry nahi hota)
@@ -2383,12 +2398,34 @@ function toggleDemandDate(i){
 // Pending (abhi Credit hi nahi hua) waalon ka comment khaali hona to normal hai,
 // unhe yahan nahi dikhaya jaata
 // Data taiyar karta hai (screen render aur PDF dono isi ko use karte hain)
+// Ek Payment ka "kitna Diya" pata karta hai — agar kabhi paidAmount set hi nahi
+// hua (purana data / purana comment-based tareeka), to 0 maanta hai yahan
+// (list se hatane ka faisla comment se hoga, jaisa pehle hota tha)
+function getPaymentPaidAmount(payment){
+  if(!payment) return 0;
+  const tracked = payment.paidAmount !== undefined && payment.paidAmount !== null;
+  return tracked ? (Number(payment.paidAmount) || 0) : 0;
+}
+
 function getPaymentPendingData(){
   const pending = DATA.demands.filter(d => {
-    const hasComment = d.comment && String(d.comment).trim();
-    if(hasComment) return false;
     const ac = DATA.acCredits.find(x => x.date === d.date && x.labourId === d.labourId);
-    return ac && ac.status === "Credited";
+    if(!(ac && ac.status === "Credited")) return false;
+
+    const p = DATA.payments.find(x => x.date === d.date && x.labourId === d.labourId);
+    const tracked = p && p.paidAmount !== undefined && p.paidAmount !== null;
+
+    if(tracked){
+      // Naya tareeka — Baaki Payment (Partial) track ho raha hai: poora paid
+      // hone tak list me rahega, comment se koi farak nahi padta
+      const total = p.amount || 0;
+      const paid = getPaymentPaidAmount(p);
+      return paid < total;
+    }
+
+    // Purana tareeka — jab tak Comment na likha ho, list me rahega
+    const hasComment = d.comment && String(d.comment).trim();
+    return !hasComment;
   });
 
   const byLabour = {};
@@ -2401,8 +2438,11 @@ function getPaymentPendingData(){
     const items = byLabour[labourId].slice().sort((a, b) => a.date.localeCompare(b.date)).map(d => {
       const p = DATA.payments.find(x => x.date === d.date && x.labourId === labourId);
       const amt = p ? (p.amount || 0) : 0;
+      const tracked = p && p.paidAmount !== undefined && p.paidAmount !== null;
+      const paid = getPaymentPaidAmount(p);
+      const baakiAmt = Math.max(amt - paid, 0);
       total += amt; bulkCount++;
-      return { demandId: d.id, date: d.date, kulDin: d.kulDin || 0, amt };
+      return { demandId: d.id, date: d.date, kulDin: d.kulDin || 0, amt, paid, baakiAmt, tracked };
     });
     bulkTotal += total;
     return { labour: l, items, total };
@@ -2421,15 +2461,30 @@ function renderPaymentPending(){
   let html = groups.map(g => `
     <div class="pp-block">
       <div class="pp-head"><span>${escapeHtml(g.labour.name || "—")}</span><span>₹${g.total.toFixed(2)}</span></div>
-      ${g.items.map(i => `
-        <div class="pp-item">
-          <span>${fmtDate(i.date)} · ${i.kulDin} Din · ₹${i.amt.toFixed(2)}</span>
-          <div style="display:flex;gap:4px;align-items:center">
-            <input type="text" id="ppNote-${i.demandId}" placeholder="jaise: de diya" style="width:100px;padding:4px 6px;font-size:11px">
-            <button class="btn btn-blue btn-sm" style="padding:4px 8px" onclick="savePendingNote('${i.demandId}')">💾</button>
+      ${g.items.map(i => {
+        const badge = i.tracked
+          ? (i.paid > 0
+              ? `<span class="badge" style="background:#fff3d6;color:#8a5300">🟡 Baaki ₹${i.baakiAmt.toFixed(2)}</span>`
+              : `<span class="badge pending">🔴 Payment Baaki</span>`)
+          : `<span class="badge pending">🔴 Payment Baaki</span>`;
+        return `
+        <div class="pp-item" style="flex-direction:column;align-items:stretch;gap:5px">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+            <span>${fmtDate(i.date)} · ${i.kulDin} Din · Kul ₹${i.amt.toFixed(2)}</span>
+            ${badge}
+          </div>
+          ${i.tracked && i.paid > 0 ? `<div style="font-size:11px;color:var(--muted)">Ab Tak Diya: ₹${i.paid.toFixed(2)} &nbsp;|&nbsp; Baaki: ₹${i.baakiAmt.toFixed(2)}</div>` : ""}
+          <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+            <input type="number" id="ppAmt-${i.demandId}" placeholder="Kitna Diya (₹)" style="width:110px;padding:4px 6px;font-size:11px">
+            <button class="btn btn-blue btn-sm" style="padding:4px 8px" onclick="savePendingAmount('${i.demandId}')">💾 Payment Save</button>
+          </div>
+          <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+            <input type="text" id="ppNote-${i.demandId}" placeholder="jaise: de diya" style="width:110px;padding:4px 6px;font-size:11px">
+            <button class="btn btn-blue btn-sm" style="padding:4px 8px" onclick="savePendingNote('${i.demandId}')">💾 Note</button>
           </div>
         </div>
-      `).join("")}
+      `;
+      }).join("")}
     </div>
   `).join("");
 
@@ -2453,6 +2508,33 @@ function savePendingNote(demandId){
   renderDemands();
 }
 
+// Payment Pending list se seedha "Kitna Diya" Amount Save karo — Baaki/Partial
+// Payment track karne ke liye. Jab tak Kul Amount pura na mil jaye, list me rahega.
+function savePendingAmount(demandId){
+  const input = $("ppAmt-" + demandId);
+  if(!input) return;
+  const val = parseFloat(input.value);
+  if(!val || val <= 0){ toast("Pehle sahi Amount likhein", "error"); return; }
+
+  const d = DATA.demands.find(x => x.id === demandId);
+  if(!d){ toast("Demand nahi mili", "error"); return; }
+  const p = DATA.payments.find(x => x.date === d.date && x.labourId === d.labourId);
+  if(!p){ toast("Is Demand ki Payment abhi bani nahi hai", "error"); return; }
+
+  const total = p.amount || 0;
+  const alreadyPaid = getPaymentPaidAmount(p);
+  const newPaid = Math.min(alreadyPaid + val, total);
+  p.paidAmount = newPaid;
+  const baaki = Math.max(total - newPaid, 0);
+
+  input.value = "";
+  persist();
+  toast(baaki > 0 ? `₹${val} Save hua — ₹${baaki.toFixed(2)} abhi bhi Baaki hai` : "✅ Poora Payment ho gaya", "success");
+  renderPaymentPending();
+  renderDemandDates();
+  renderDemands();
+}
+
 // Payment Pending list ka Print-friendly HTML (PDF ke liye)
 function paymentPendingPdfHtml(groups, bulkTotal, bulkCount){
   return `
@@ -2465,8 +2547,8 @@ function paymentPendingPdfHtml(groups, bulkTotal, bulkCount){
             <span>${escapeHtml(g.labour.name || "—")}</span><span>₹${g.total.toFixed(2)}</span>
           </div>
           <table style="width:100%;border-collapse:collapse;font-size:10.5px">
-            <thead><tr><th style="border:1px solid #000;padding:3px">Date</th><th style="border:1px solid #000;padding:3px">Din</th><th style="border:1px solid #000;padding:3px">Amount ₹</th></tr></thead>
-            <tbody>${g.items.map(i => `<tr><td style="border:1px solid #000;padding:3px;text-align:center">${fmtDate(i.date)}</td><td style="border:1px solid #000;padding:3px;text-align:center">${i.kulDin}</td><td style="border:1px solid #000;padding:3px;text-align:center">${i.amt.toFixed(2)}</td></tr>`).join("")}</tbody>
+            <thead><tr><th style="border:1px solid #000;padding:3px">Date</th><th style="border:1px solid #000;padding:3px">Din</th><th style="border:1px solid #000;padding:3px">Amount ₹</th><th style="border:1px solid #000;padding:3px">Diya ₹</th><th style="border:1px solid #000;padding:3px">Baaki ₹</th></tr></thead>
+            <tbody>${g.items.map(i => `<tr><td style="border:1px solid #000;padding:3px;text-align:center">${fmtDate(i.date)}</td><td style="border:1px solid #000;padding:3px;text-align:center">${i.kulDin}</td><td style="border:1px solid #000;padding:3px;text-align:center">${i.amt.toFixed(2)}</td><td style="border:1px solid #000;padding:3px;text-align:center">${i.paid.toFixed(2)}</td><td style="border:1px solid #000;padding:3px;text-align:center">${i.baakiAmt.toFixed(2)}</td></tr>`).join("")}</tbody>
           </table>
         </div>
       `).join("")}
@@ -3012,6 +3094,13 @@ let nregaSelected = new Set();
 let nregaShowAll = false;  // Naya variable
 let nregaFilterMode = null;  // "gt" (isse zyada) ya "lt" (isse kam)
 let nregaFilterVal = null;
+let nregaDinOverride = {};  // labourId -> user ne "Kul Divas" column me haath se jo Din likha (auto-suggestion se hatkar)
+
+// User ne Form 10 table me "Kul Divas" column khud badla — agli baar wahi value dikhegi
+function setNregaDinOverride(labourId, val){
+  if(val === "" || val === null || val === undefined) delete nregaDinOverride[labourId];
+  else nregaDinOverride[labourId] = val;
+}
 
 function renderNregaSearch(){
   const term = ($("nregaSearch").value || "").trim().toLowerCase();
@@ -3048,10 +3137,17 @@ function renderNregaSearch(){
     const isDual = jcMembers.length > 1;
     const isSel = nregaSelected.has(l.id);
     const partnerSelected = isDual && !isSel && jcMembers.some(m => m.id !== l.id && nregaSelected.has(m.id));
+
+    // Baaki Din ke hisaab se suggestion — sirf Dual-Jobcard (2+ Active naam) me maayne rakhta hai
+    const suggestion = isDual ? getJobcardNameSuggestion(baaki) : null;
+    const suggestionBadge = suggestion === "one"
+      ? ' <span class="badge" style="background:#d9f2e6;color:#0f6b3f">💡 1 Naam Kaafi</span>'
+      : (suggestion === "two" ? ' <span class="badge" style="background:#d9f2e6;color:#0f6b3f">💡 2 Naam Ban Sakte Hain</span>' : "");
+
     return `
     <div class="chk-item">
       <input type="checkbox" class="nrega-chk" value="${l.id}" ${isSel ? "checked" : ""} onchange="toggleNregaSelect('${l.id}', this.checked)">
-      <div style="flex:1">${escapeHtml(l.name)} <span style="font-size:12px;color:var(--muted)">(Jobcard: ${escapeHtml(l.jobcardNo)})</span>${low ? ' <span class="badge" style="background:#ffe4b3;color:#8a5300">⚠️ Kam Din</span>' : ""}${partnerSelected ? ' <span class="badge" style="background:#ffe4b3;color:#8a5300">Jodidaar select, ye baaki</span>' : ""}</div>
+      <div style="flex:1">${escapeHtml(l.name)} <span style="font-size:12px;color:var(--muted)">(Jobcard: ${escapeHtml(l.jobcardNo)})</span>${low ? ' <span class="badge" style="background:#ffe4b3;color:#8a5300">⚠️ Kam Din</span>' : ""}${partnerSelected ? ' <span class="badge" style="background:#ffe4b3;color:#8a5300">Jodidaar select, ye baaki</span>' : ""}${suggestionBadge}</div>
       <div style="font-size:11px;color:var(--muted);text-align:right;line-height:1.5">Hue: <b style="color:var(--green-dark)">${hue}</b><br>Baaki: <b style="color:${low ? "#c0392b" : "#b05e0d"}">${baaki}</b></div>
     </div>
   `;
@@ -3145,11 +3241,52 @@ function buildNregaFormTable(){
   const rows = [...inSeries, ...outside];
   const skipped = Array.from(nregaSelected).length - rows.length;
 
-  // Sirf जॉब कार्ड नंबर + श्रमिक का नाम bharte hain — baaki column khaali (hath se bharne ke liye)
+  // "Kul Divas" column ke liye Din suggest karta hai — Jobcard ke Baaki Din
+  // ke hisaab se (10-16 Baaki = 1 Naam, 16+ Baaki = 2 Naam me aadha-aadha baant kar).
+  // Naam ke hisaab se rows ko jobcard-wise group karke suggestion nikalta hai.
+  const jcRowIndexes = {};
+  rows.forEach((l, idx) => {
+    if(!jcRowIndexes[l.jobcardNo]) jcRowIndexes[l.jobcardNo] = [];
+    jcRowIndexes[l.jobcardNo].push(idx);
+  });
+
+  Object.keys(jcRowIndexes).forEach(jc => {
+    const idxs = jcRowIndexes[jc];
+    const baaki = getJobcardBaaki(jc);
+    const suggestion = getJobcardNameSuggestion(baaki);
+
+    if(suggestion === "one" || suggestion === "warn"){
+      // Kam Din hain — sirf pehle Naam ko poora Baaki de do, baaki naam (agar
+      // Series se bahar select kiye ho) 0 rahenge
+      idxs.forEach((idx, i) => { rows[idx].suggestedDin = i === 0 ? baaki : 0; });
+    } else if(suggestion === "two"){
+      if(idxs.length >= 2){
+        const half1 = Math.ceil(baaki / 2);
+        const half2 = baaki - half1;
+        rows[idxs[0]].suggestedDin = half1;
+        rows[idxs[1]].suggestedDin = half2;
+        for(let k = 2; k < idxs.length; k++) rows[idxs[k]].suggestedDin = 0;
+      } else {
+        rows[idxs[0]].suggestedDin = baaki;
+      }
+    } else {
+      idxs.forEach(idx => { rows[idx].suggestedDin = ""; });
+    }
+
+    // Manual override — user ne khud Din badla ho to wahi dikhega
+    idxs.forEach(idx => {
+      const ov = nregaDinOverride[rows[idx].id];
+      if(ov !== undefined && ov !== "") rows[idx].suggestedDin = ov;
+    });
+  });
+
+  // जॉब कार्ड नंबर + श्रमिक का नाम + suggested "Kul Divas" bharte hain —
+  // Kul Divas ab editable hai, hath se bhi badla ja sakta hai
   const box = $("nregaFormTableBody");
   if(box){
     box.innerHTML = rows.map((l, i) => `
-      <tr><td>${i + 1}</td><td></td><td>${escapeHtml(l.jobcardNo)}</td><td>${escapeHtml(l.name)}</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td>${i + 1}</td><td></td><td>${escapeHtml(l.jobcardNo)}</td><td>${escapeHtml(l.name)}</td><td></td><td></td><td></td><td></td><td></td>
+      <td><input type="number" class="nrega-din-input" value="${l.suggestedDin !== undefined ? l.suggestedDin : ""}" min="0" style="width:52px;padding:2px 4px;text-align:center" onchange="setNregaDinOverride('${l.id}', this.value); buildNregaFormTable()"></td></tr>
     `).join("");
   }
 
@@ -3202,7 +3339,7 @@ async function renderNregaPdfPages(pdf, rows, marginMM, pageWidthMM, pageHeightM
       const chunk = chunks[p];
       const startIndex = p * ROWS_PER_PAGE;
       const rowsHtml = chunk.map((l, i) => `
-        <tr><td>${startIndex + i + 1}</td><td></td><td>${escapeHtml(l.jobcardNo)}</td><td>${escapeHtml(l.name)}</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>${startIndex + i + 1}</td><td></td><td>${escapeHtml(l.jobcardNo)}</td><td>${escapeHtml(l.name)}</td><td></td><td></td><td></td><td></td><td></td><td>${l.suggestedDin !== undefined && l.suggestedDin !== "" ? l.suggestedDin : ""}</td></tr>
       `).join("");
 
       container.innerHTML = nregaLetterHtml(rowsHtml, p === chunks.length - 1, p + 1, chunks.length);

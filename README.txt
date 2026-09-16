@@ -3,7 +3,26 @@
   Developed by Kurban Ali
 ═══════════════════════════════════════════════════════════════
 
-🔧 IS ROUND KI FIXES:
+🆕 IS ROUND KE NAYE FEATURE (v32):
+───────────────────────────────────
+1. ✅ Baaki Payment (Partial Payment) — Payment Pending list me ab
+   "Kitna Diya" Amount daal kar 💾 Payment Save kar sakte hain.
+   Agar poora paisa ek saath nahi diya (jaise aadha abhi, aadha
+   agle hafte), to Baaki Amount apne aap dikhta rahega aur jab
+   tak Poora Payment na ho jaaye, entry list se hategi nahi.
+   (Purana tareeka — sirf Comment likh kar list se hataana —
+   waisa hi chalu hai, kuch nahi tuta.)
+
+2. ✅ NREGA Form 10 — 1 ya 2 Naam Suggestion — Dual-Jobcard
+   (Pati-Patni jaisi 2 naam wali Jobcard) list me ab
+   💡 "1 Naam Kaafi" ya 💡 "2 Naam Ban Sakte Hain" badge dikhta
+   hai — Jobcard ke Baaki Din (125 me se) ke hisaab se: 10-16
+   Baaki = 1 Naam, 16+ Baaki = 2 Naam. Form 10 Preview table ke
+   last column ("कुल दिवस") me Din khud-ba-khud bhar jaate hain
+   (2 Naam ho to aadha-aadha baant kar) — chahe to hath se bhi
+   badal sakte hain, PDF me wahi final value jaayegi.
+
+🔧 PICHLE ROUND KI FIXES:
 ──────────────────────
 1. ✅ Bulk Import (CSV / Excel / PDF) — ab file me agar Sr.No /
    Serial No. jaisa koi column hai, to woh automatically IGNORE
