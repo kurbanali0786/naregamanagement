@@ -3,11 +3,11 @@
    Developed by Kurban Ali
    ============================================================ */
 
-const CACHE_NAME = "labour-jobcard-v29";
+const CACHE_NAME = "labour-jobcard-v31";
 const ASSETS = [
   "./",
   "./index.html",
-  "./app.js?v=31",
+  "./app.js?v=33",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png"

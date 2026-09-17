@@ -116,6 +116,11 @@ tr:hover td{background:#f5faf7}
 .badge.completed{background:#dbeafe;color:#1d4ed8}
 .badge.pending{background:#fdeed7;color:#b05e0d}
 .badge.credited{background:#d5f2df;color:#146c33}
+.star-btn{background:none;border:1px solid #d8ded9;border-radius:8px;padding:2px 8px;font-size:11.5px;cursor:pointer;color:#6b7a72}
+.star-btn.active{background:#fff3d6;border-color:#b7791f;color:#b7791f;font-weight:700}
+.sum-chip{flex:1;min-width:110px;border:1px solid var(--border);border-radius:10px;padding:8px;text-align:center}
+.sum-chip .v{font-size:15px;font-weight:700}
+.sum-chip .l{font-size:11px;color:var(--muted)}
 .empty{text-align:center;color:var(--muted);padding:26px;font-size:13.5px;background:#fafbfa;border:1.5px dashed var(--border);border-radius:10px;margin-top:10px}
 .chk-list{max-height:320px;overflow-y:auto;border:1.5px solid var(--border);border-radius:12px;margin-top:10px;background:#fcfdfc}
 .chk-item{display:flex;align-items:center;gap:10px;padding:11px 13px;border-bottom:1px solid #e8eee9;font-size:13.5px;transition:background .12s}
@@ -527,7 +532,8 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
         <h3>⏳ Payment Pending <span style="font-size:12.5px;color:var(--muted);font-weight:400">(Khaali Comment)</span></h3>
         <button class="btn btn-outline btn-sm acc-btn" data-show="⏳ Payment Pending Dikhayein" data-hide="🙈 Payment Pending Chhupayein" onclick="toggleAcc('paymentPendingBox', this)">⏳ Payment Pending Dikhayein</button>
         <div class="collapsible acc-item" id="paymentPendingBox">
-          <p style="font-size:12px;color:var(--muted);margin:8px 0">Jin Demand ka payment <b>Credit ho chuka hai</b> lekin Comment abhi bhi khaali hai (Pending waalon ka comment khaali hona normal hai, wo yahan nahi aate) — Labour-wise group ho kar aati hain.</p>
+          <p style="font-size:12px;color:var(--muted);margin:8px 0">Jin Demand ka payment <b>Credit ho chuka hai</b> lekin abhi Labour ko poora nahi diya (Comment khaali hai, ya kuch Baaki hai) — Labour-wise group ho kar aati hain.</p>
+          <p style="font-size:12px;color:var(--muted);margin:0 0 8px">💡 <b>Aadha/Kuch Payment Diya?</b> "Kitna Diya" me Amount likh kar 💾 Payment Save karein — Baaki amount apne aap dikhta rahega, jab tak Poora paisa na mil jaye tab tak entry yahin rahegi.</p>
           <div class="row">
             <button class="btn btn-orange btn-sm" onclick="downloadPaymentPendingPDF()">⬇️ PDF Download</button>
             <button class="btn btn-sm" style="background:#25D366;color:#fff" onclick="sharePaymentPendingPDF()">📲 WhatsApp Share</button>
@@ -647,6 +653,10 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
           <button class="btn btn-gray btn-sm" onclick="clearNregaFilter()">Filter Clear</button>
         </div>
         <div class="row mt">
+          <button class="btn" id="nregaModeAuto" style="background:var(--green);color:#fff" onclick="setNregaMode('auto')">🤖 Auto (App Decide Kare)</button>
+          <button class="btn btn-outline" id="nregaModeManual" onclick="setNregaMode('manual')">✋ Manual (Main Chununga)</button>
+        </div>
+        <div class="row mt">
           <label style="font-size:13.5px;display:flex;align-items:center;gap:8px;font-weight:600">
             <input type="checkbox" id="nregaSelectAll" onchange="toggleNregaSelectAll()"> Sabhi Select karein
           </label>
@@ -660,6 +670,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
           <button class="btn btn-outline btn-sm" id="btnToggleNregaPreview" onclick="toggleCollapse('nregaPrintArea', this, '👁️ Preview Dikhayein', '🙈 Preview Chhupayein')">👁️ Preview Dikhayein</button>
         </div>
         <p style="font-size:12px;color:var(--muted);margin-top:6px">ℹ️ Labour select karte hi neeche Form 10 ka <b>live preview</b> ban jayega — phir ⬇️ PDF Download se seedha PDF mil jayega.</p>
+        <p style="font-size:12px;color:var(--muted);margin-top:4px">💡 <b>Auto Mode</b> me Dual-Jobcard (2 Naam wali Jobcard) ke saamne ➕/✖️ button dikhta hai — app khud Baaki Din dekh kar tay karta hai kitne Naam (1 ya 2) jaayenge aur ⭐ Priority wale Naam ko tarjeeh deta hai (⭐ button se kisi ko bhi priority bana sakte hain). <b>Manual Mode</b> me pehle jaisa checkbox se khud chun sakte hain.</p>
       </div>
 
       <div id="nregaPrintArea" class="collapsible">
@@ -714,6 +725,37 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
   </div>
 </div>
 
+<!-- ============ PAYMENT LEDGER / KHATA (popup, Labour list ke 📒 button se khulta hai) ============ -->
+<div id="ledgerModalOverlay" class="modal-overlay-lg hidden">
+  <div class="modal-lg">
+    <button class="close-x" onclick="closeLedgerModal()">✖️</button>
+    <h3 id="ledgerModalTitle">📒 Khata</h3>
+    <input type="hidden" id="ledgerModalLabourId">
+    <p style="font-size:12.5px;color:var(--muted);margin-bottom:8px">Kis Date ko kitna Payment <b>Aaya</b> (Bank Credit) aur kis Date ko kitna <b>Diya</b> (Cash) — sab ek jagah, Baaki hamesha up-to-date.</p>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+        <thead>
+          <tr>
+            <th style="border:1px solid var(--border);padding:6px;background:var(--bg-alt,#f4f6f5)">Date</th>
+            <th style="border:1px solid var(--border);padding:6px;background:var(--bg-alt,#f4f6f5);text-align:left">Detail</th>
+            <th style="border:1px solid var(--border);padding:6px;background:var(--bg-alt,#f4f6f5)">Din</th>
+            <th style="border:1px solid var(--border);padding:6px;background:var(--bg-alt,#f4f6f5)">Aaya ₹</th>
+            <th style="border:1px solid var(--border);padding:6px;background:var(--bg-alt,#f4f6f5)">Diya ₹</th>
+            <th style="border:1px solid var(--border);padding:6px;background:var(--bg-alt,#f4f6f5)">Baaki ₹</th>
+          </tr>
+        </thead>
+        <tbody id="ledgerBody" style="text-align:center"></tbody>
+      </table>
+    </div>
+    <div id="ledgerSummary" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"></div>
+    <div class="row mt">
+      <input type="date" id="ledgerEntryDate">
+      <input type="number" id="ledgerEntryAmt" placeholder="Kitna Diya (₹)" style="width:130px">
+      <button class="btn btn-green btn-sm" onclick="addLedgerEntryManual()">💾 Diya Entry Save Karo</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ TOAST & MODAL ============ -->
 <div id="toastContainer"></div>
 <div id="modalOverlay" class="hidden">
@@ -743,7 +785,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   }
 </script>
-<script src="app.js?v=31"></script>
+<script src="app.js?v=33"></script>
 <script>
 /* Agar app.js load hi na ho (404 / internet / purani cache) to Login button "dead" lagta hai —
    user ko saaf message dikhao ki asli problem kya hai */
