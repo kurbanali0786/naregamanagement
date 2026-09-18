@@ -3,37 +3,7 @@
   Developed by Kurban Ali
 ═══════════════════════════════════════════════════════════════
 
-🆕 IS ROUND KE NAYE FEATURE (v33):
-───────────────────────────────────
-1. ✅ Payment Ledger (Khata) — Labour list me har naam ke saamne ab
-   "📒 Khata" button hai. Isme poora hisaab dikhta hai: kis Date ko
-   kitna Payment "Aaya" (Bank Credit) aur kis Date ko kitna "Diya"
-   (Cash) — sab ek table me, Running Baaki ke saath. Khata se hi
-   naya "Diya" entry (Date + Amount) add kar sakte hain — sabse
-   purani Baaki Demand se pehle adjust hota hai (FIFO), jaisa
-   normal Khata-Bahi me hota hai.
-
-2. ✅ NREGA Form 10 — Auto/Manual Mode — Ab "🤖 Auto" aur
-   "✋ Manual" do mode hain. Auto Mode me Dual-Jobcard (2 Naam
-   wali Jobcard) ke saamne ek hi ➕/✖️ button hota hai — usse
-   dabate hi App khud Baaki Din dekh kar tay kar leta hai ki 1
-   Naam bhejna hai ya 2, aur ⭐ Priority wale Naam (jaise Wife) ko
-   pehle chunta hai. ⭐ Priority kisi bhi Naam par laga sakte hain.
-   Manual Mode me pehle jaisa checkbox se khud selection kar sakte
-   hain.
-
-🆕 PICHLE ROUND KE FEATURE (v32):
-───────────────────────────────────
-1. ✅ Baaki Payment (Partial Payment) — Payment Pending list me
-   "Kitna Diya" Amount daal kar 💾 Payment Save kar sakte hain
-   (v33 me isi data ko poore Khata/Ledger ke roop me bhi dekh
-   sakte hain — 📒 Khata button se).
-
-2. ✅ NREGA Form 10 — 1/2 Naam Suggestion badge (v33 me is
-   suggestion ko App khud follow bhi kar sakta hai — Auto Mode
-   dekhein).
-
-🔧 PICHLE ROUND KI FIXES:
+🔧 IS ROUND KI FIXES:
 ──────────────────────
 1. ✅ Bulk Import (CSV / Excel / PDF) — ab file me agar Sr.No /
    Serial No. jaisa koi column hai, to woh automatically IGNORE

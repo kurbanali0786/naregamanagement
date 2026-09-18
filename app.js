@@ -51,10 +51,7 @@ let currentUser = null;
 let DATA = {
   labours: [],   // {id, jobcardNo, name, aadhar, status}
   demands: [],   // {id, date, labourId}
-  payments: [],  // {id, date, labourId, amount, mateShare, labourShare, paidAmount}
-                 // paidAmount = ab tak Labour ko haath me kitna diya (optional — Baaki
-                 // Payment / Partial Payment track karne ke liye). Agar kabhi set na
-                 // ho, purana comment-based tareeka hi chalega (backward-compatible).
+  payments: [],  // {id, date, labourId, amount, mateShare, labourShare}
   acCredits: [], // {id, date, labourId, status}
   trash: []      // {id, type: 'labour'|'demand'|'payment', data, cascade, deletedAt}
 };
@@ -626,18 +623,6 @@ let lpLastReport = [];        // Generate ke baad ka result — Print/PDF isi ko
 const JOBCARD_DIN_LIMIT = 125; // Har Jobcard pe (1 ya 2+ naam) itni Hajri milti hai (sab naamon ke saath)
 const JOBCARD_LOW_WARNING = 16; // Isse kam Baaki ho to ⚠️ Warning dikhegi (Form 10 me min 10-16 din chahiye)
 
-// Form 10 me Baaki Din ke hisaab se kitne Naam daalne hain — ye rule batata hai:
-//  - 10 se kam Baaki  → "warn" (jaldi Form 10 nikalwa lein, Din waste ho sakte hain)
-//  - 10 se 16 tak     → "one"  (sirf 1 Naam kaafi hai)
-//  - 16 se zyada      → "two"  (Dual-Jobcard ho to 2 Naam me baant sakte hain)
-//  - 0 ya khaali      → null  (kuch suggest karne layak nahi)
-function getJobcardNameSuggestion(baaki){
-  if(!baaki || baaki <= 0) return null;
-  if(baaki < 10) return "warn";
-  if(baaki <= JOBCARD_LOW_WARNING) return "one";
-  return "two";
-}
-
 // NREGA Financial Year: 1 April se 31 March — 125 Din ka hisaab har naye
 // Financial Year me apne aap 0 se shuru ho jaata hai (purane saal ka carry nahi hota)
 function getCurrentFYRange(){
@@ -1206,10 +1191,6 @@ function closeTrashModal(){
 }
 $("trashModalOverlay").addEventListener("click", e => {
   if(e.target.id === "trashModalOverlay") closeTrashModal();
-});
-
-$("ledgerModalOverlay").addEventListener("click", e => {
-  if(e.target.id === "ledgerModalOverlay") closeLedgerModal();
 });
 
 function exportDataJSON(){
@@ -2153,7 +2134,6 @@ function renderLabours(){
       <td><span class="badge ${l.status.toLowerCase()}">${l.status}</span></td>
       <td>
         <button class="btn btn-blue btn-sm" onclick="editLabour('${l.id}')">Edit</button>
-        <button class="btn btn-outline btn-sm" onclick="openLedgerModal('${l.id}')">📒 Khata</button>
         <button class="btn btn-red btn-sm" onclick="deleteLabour('${l.id}')">Delete</button>
       </td>
     </tr>
@@ -2403,34 +2383,12 @@ function toggleDemandDate(i){
 // Pending (abhi Credit hi nahi hua) waalon ka comment khaali hona to normal hai,
 // unhe yahan nahi dikhaya jaata
 // Data taiyar karta hai (screen render aur PDF dono isi ko use karte hain)
-// Ek Payment ka "kitna Diya" pata karta hai — agar kabhi paidAmount set hi nahi
-// hua (purana data / purana comment-based tareeka), to 0 maanta hai yahan
-// (list se hatane ka faisla comment se hoga, jaisa pehle hota tha)
-function getPaymentPaidAmount(payment){
-  if(!payment) return 0;
-  const tracked = payment.paidAmount !== undefined && payment.paidAmount !== null;
-  return tracked ? (Number(payment.paidAmount) || 0) : 0;
-}
-
 function getPaymentPendingData(){
   const pending = DATA.demands.filter(d => {
-    const ac = DATA.acCredits.find(x => x.date === d.date && x.labourId === d.labourId);
-    if(!(ac && ac.status === "Credited")) return false;
-
-    const p = DATA.payments.find(x => x.date === d.date && x.labourId === d.labourId);
-    const tracked = p && p.paidAmount !== undefined && p.paidAmount !== null;
-
-    if(tracked){
-      // Naya tareeka — Baaki Payment (Partial) track ho raha hai: poora paid
-      // hone tak list me rahega, comment se koi farak nahi padta
-      const total = p.amount || 0;
-      const paid = getPaymentPaidAmount(p);
-      return paid < total;
-    }
-
-    // Purana tareeka — jab tak Comment na likha ho, list me rahega
     const hasComment = d.comment && String(d.comment).trim();
-    return !hasComment;
+    if(hasComment) return false;
+    const ac = DATA.acCredits.find(x => x.date === d.date && x.labourId === d.labourId);
+    return ac && ac.status === "Credited";
   });
 
   const byLabour = {};
@@ -2443,11 +2401,8 @@ function getPaymentPendingData(){
     const items = byLabour[labourId].slice().sort((a, b) => a.date.localeCompare(b.date)).map(d => {
       const p = DATA.payments.find(x => x.date === d.date && x.labourId === labourId);
       const amt = p ? (p.amount || 0) : 0;
-      const tracked = p && p.paidAmount !== undefined && p.paidAmount !== null;
-      const paid = getPaymentPaidAmount(p);
-      const baakiAmt = Math.max(amt - paid, 0);
       total += amt; bulkCount++;
-      return { demandId: d.id, date: d.date, kulDin: d.kulDin || 0, amt, paid, baakiAmt, tracked };
+      return { demandId: d.id, date: d.date, kulDin: d.kulDin || 0, amt };
     });
     bulkTotal += total;
     return { labour: l, items, total };
@@ -2466,30 +2421,15 @@ function renderPaymentPending(){
   let html = groups.map(g => `
     <div class="pp-block">
       <div class="pp-head"><span>${escapeHtml(g.labour.name || "—")}</span><span>₹${g.total.toFixed(2)}</span></div>
-      ${g.items.map(i => {
-        const badge = i.tracked
-          ? (i.paid > 0
-              ? `<span class="badge" style="background:#fff3d6;color:#8a5300">🟡 Baaki ₹${i.baakiAmt.toFixed(2)}</span>`
-              : `<span class="badge pending">🔴 Payment Baaki</span>`)
-          : `<span class="badge pending">🔴 Payment Baaki</span>`;
-        return `
-        <div class="pp-item" style="flex-direction:column;align-items:stretch;gap:5px">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
-            <span>${fmtDate(i.date)} · ${i.kulDin} Din · Kul ₹${i.amt.toFixed(2)}</span>
-            ${badge}
-          </div>
-          ${i.tracked && i.paid > 0 ? `<div style="font-size:11px;color:var(--muted)">Ab Tak Diya: ₹${i.paid.toFixed(2)} &nbsp;|&nbsp; Baaki: ₹${i.baakiAmt.toFixed(2)}</div>` : ""}
-          <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
-            <input type="number" id="ppAmt-${i.demandId}" placeholder="Kitna Diya (₹)" style="width:110px;padding:4px 6px;font-size:11px">
-            <button class="btn btn-blue btn-sm" style="padding:4px 8px" onclick="savePendingAmount('${i.demandId}')">💾 Payment Save</button>
-          </div>
-          <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
-            <input type="text" id="ppNote-${i.demandId}" placeholder="jaise: de diya" style="width:110px;padding:4px 6px;font-size:11px">
-            <button class="btn btn-blue btn-sm" style="padding:4px 8px" onclick="savePendingNote('${i.demandId}')">💾 Note</button>
+      ${g.items.map(i => `
+        <div class="pp-item">
+          <span>${fmtDate(i.date)} · ${i.kulDin} Din · ₹${i.amt.toFixed(2)}</span>
+          <div style="display:flex;gap:4px;align-items:center">
+            <input type="text" id="ppNote-${i.demandId}" placeholder="jaise: de diya" style="width:100px;padding:4px 6px;font-size:11px">
+            <button class="btn btn-blue btn-sm" style="padding:4px 8px" onclick="savePendingNote('${i.demandId}')">💾</button>
           </div>
         </div>
-      `;
-      }).join("")}
+      `).join("")}
     </div>
   `).join("");
 
@@ -2513,167 +2453,7 @@ function savePendingNote(demandId){
   renderDemands();
 }
 
-// Payment Pending list se seedha "Kitna Diya" Amount Save karo — Baaki/Partial
-// Payment track karne ke liye. Jab tak Kul Amount pura na mil jaye, list me rahega.
-function savePendingAmount(demandId){
-  const input = $("ppAmt-" + demandId);
-  if(!input) return;
-  const val = parseFloat(input.value);
-  if(!val || val <= 0){ toast("Pehle sahi Amount likhein", "error"); return; }
-
-  const d = DATA.demands.find(x => x.id === demandId);
-  if(!d){ toast("Demand nahi mili", "error"); return; }
-  const p = DATA.payments.find(x => x.date === d.date && x.labourId === d.labourId);
-  if(!p){ toast("Is Demand ki Payment abhi bani nahi hai", "error"); return; }
-
-  const total = p.amount || 0;
-  const alreadyPaid = getPaymentPaidAmount(p);
-  const applied = Math.min(val, Math.max(total - alreadyPaid, 0));
-  const newPaid = alreadyPaid + applied;
-  p.paidAmount = newPaid;
-  if(!Array.isArray(p.payHistory)) p.payHistory = [];
-  if(applied > 0) p.payHistory.push({ date: todayISO(), amount: applied });
-  const baaki = Math.max(total - newPaid, 0);
-
-  input.value = "";
-  persist();
-  toast(baaki > 0 ? `₹${val} Save hua — ₹${baaki.toFixed(2)} abhi bhi Baaki hai` : "✅ Poora Payment ho gaya", "success");
-  renderPaymentPending();
-  renderDemandDates();
-  renderDemands();
-}
-
-// Ek Labour ka poora Payment Ledger (Khata) — kis Date ko kitna Payment "Aaya"
-// (AC Credit hone par) aur kis Date ko kitna "Diya" (Cash haath me), sab
-// milakar ek Running Baaki ke saath. Hajri/Din bhi saath me dikhta hai.
-function getLabourLedger(labourId){
-  const rows = [];
-
-  DATA.demands.filter(d => d.labourId === labourId).forEach(d => {
-    const p = DATA.payments.find(x => x.date === d.date && x.labourId === labourId);
-    const ac = DATA.acCredits.find(x => x.date === d.date && x.labourId === labourId);
-    if(ac && ac.status === "Credited" && p){
-      const aayaDate = ac.creditedDate || d.date;
-      rows.push({
-        date: aayaDate,
-        detail: `Payment Aaya — ${d.kulDin || 0} Din`,
-        din: d.kulDin || 0,
-        aaya: p.amount || 0,
-        diya: 0,
-        sortKey: aayaDate + "_0"
-      });
-    }
-    if(p && Array.isArray(p.payHistory)){
-      p.payHistory.forEach(h => {
-        rows.push({
-          date: h.date,
-          detail: "Cash Diya",
-          din: "",
-          aaya: 0,
-          diya: h.amount || 0,
-          sortKey: h.date + "_1"
-        });
-      });
-    }
-  });
-
-  rows.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
-  let bal = 0, kulAaya = 0, kulDiya = 0;
-  rows.forEach(r => {
-    bal += r.aaya - r.diya;
-    kulAaya += r.aaya; kulDiya += r.diya;
-    r.balance = bal;
-  });
-
-  return { rows, kulAaya, kulDiya, baaki: bal };
-}
-
-function openLedgerModal(labourId){
-  const l = DATA.labours.find(x => x.id === labourId);
-  if(!l) return;
-  $("ledgerModalLabourId").value = labourId;
-  $("ledgerModalTitle").textContent = `📒 Khata — ${l.name} (Jobcard: ${l.jobcardNo})`;
-  renderLedgerModal();
-  $("ledgerModalOverlay").classList.remove("hidden");
-}
-function closeLedgerModal(){
-  $("ledgerModalOverlay").classList.add("hidden");
-}
-function renderLedgerModal(){
-  const labourId = $("ledgerModalLabourId").value;
-  if(!labourId) return;
-  const { rows, kulAaya, kulDiya, baaki } = getLabourLedger(labourId);
-
-  if(!rows.length){
-    $("ledgerBody").innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--muted)">Abhi tak koi Aaya/Diya entry nahi hai.</td></tr>`;
-  } else {
-    $("ledgerBody").innerHTML = rows.map(r => `
-      <tr>
-        <td>${fmtDate(r.date)}</td>
-        <td style="text-align:left">${escapeHtml(r.detail)}</td>
-        <td>${r.din || "—"}</td>
-        <td>${r.aaya ? "₹" + r.aaya.toFixed(2) : "—"}</td>
-        <td>${r.diya ? "₹" + r.diya.toFixed(2) : "—"}</td>
-        <td><b>₹${r.balance.toFixed(2)}</b></td>
-      </tr>
-    `).join("");
-  }
-
-  $("ledgerSummary").innerHTML = `
-    <div class="sum-chip"><div class="v">₹${kulAaya.toFixed(2)}</div><div class="l">Kul Aaya</div></div>
-    <div class="sum-chip"><div class="v">₹${kulDiya.toFixed(2)}</div><div class="l">Kul Diya</div></div>
-    <div class="sum-chip"><div class="v" style="color:${baaki > 0 ? "#c0392b" : "#146c33"}">₹${baaki.toFixed(2)}</div><div class="l">Ab Baaki</div></div>
-  `;
-}
-
-// Ledger modal se seedha "Cash Diya" entry add karo (koi bhi Date chun kar)
-function addLedgerEntryManual(){
-  const labourId = $("ledgerModalLabourId").value;
-  if(!labourId) return;
-  const date = $("ledgerEntryDate").value;
-  const amt = parseFloat($("ledgerEntryAmt").value);
-  if(!date){ toast("Pehle Date chunein", "error"); return; }
-  if(!amt || amt <= 0){ toast("Sahi Amount likhein", "error"); return; }
-
-  // Sabse purani "Baaki" Demand dhoondo aur usi ki Payment me jama karo
-  // (FIFO — jo pehle Aaya, usi ka Baaki pehle chukta hota hai)
-  const openPayments = DATA.demands
-    .filter(d => d.labourId === labourId)
-    .map(d => ({ d, p: DATA.payments.find(x => x.date === d.date && x.labourId === labourId) }))
-    .filter(x => {
-      if(!x.p) return false;
-      const ac = DATA.acCredits.find(a => a.date === x.d.date && a.labourId === labourId);
-      return ac && ac.status === "Credited";
-    })
-    .sort((a, b) => a.d.date.localeCompare(b.d.date));
-
-  let remaining = amt;
-  for(const { p } of openPayments){
-    if(remaining <= 0) break;
-    const total = p.amount || 0;
-    const alreadyPaid = getPaymentPaidAmount(p);
-    const baaki = Math.max(total - alreadyPaid, 0);
-    if(baaki <= 0) continue;
-    const applied = Math.min(remaining, baaki);
-    p.paidAmount = alreadyPaid + applied;
-    if(!Array.isArray(p.payHistory)) p.payHistory = [];
-    p.payHistory.push({ date, amount: applied });
-    remaining -= applied;
-  }
-
-  if(remaining > 0){
-    toast(`₹${(amt - remaining).toFixed(2)} hi adjust ho paya — ₹${remaining.toFixed(2)} kisi Baaki Demand se match nahi hua`, "info");
-  } else {
-    toast("✅ Entry Save ho gayi", "success");
-  }
-
-  $("ledgerEntryAmt").value = "";
-  persist();
-  renderLedgerModal();
-  renderPaymentPending();
-}
-
-
+// Payment Pending list ka Print-friendly HTML (PDF ke liye)
 function paymentPendingPdfHtml(groups, bulkTotal, bulkCount){
   return `
     <div style="font-family:'Hind',Arial,sans-serif;color:#000;background:#fff;padding:8px;border:1px solid #000">
@@ -2685,8 +2465,8 @@ function paymentPendingPdfHtml(groups, bulkTotal, bulkCount){
             <span>${escapeHtml(g.labour.name || "—")}</span><span>₹${g.total.toFixed(2)}</span>
           </div>
           <table style="width:100%;border-collapse:collapse;font-size:10.5px">
-            <thead><tr><th style="border:1px solid #000;padding:3px">Date</th><th style="border:1px solid #000;padding:3px">Din</th><th style="border:1px solid #000;padding:3px">Amount ₹</th><th style="border:1px solid #000;padding:3px">Diya ₹</th><th style="border:1px solid #000;padding:3px">Baaki ₹</th></tr></thead>
-            <tbody>${g.items.map(i => `<tr><td style="border:1px solid #000;padding:3px;text-align:center">${fmtDate(i.date)}</td><td style="border:1px solid #000;padding:3px;text-align:center">${i.kulDin}</td><td style="border:1px solid #000;padding:3px;text-align:center">${i.amt.toFixed(2)}</td><td style="border:1px solid #000;padding:3px;text-align:center">${i.paid.toFixed(2)}</td><td style="border:1px solid #000;padding:3px;text-align:center">${i.baakiAmt.toFixed(2)}</td></tr>`).join("")}</tbody>
+            <thead><tr><th style="border:1px solid #000;padding:3px">Date</th><th style="border:1px solid #000;padding:3px">Din</th><th style="border:1px solid #000;padding:3px">Amount ₹</th></tr></thead>
+            <tbody>${g.items.map(i => `<tr><td style="border:1px solid #000;padding:3px;text-align:center">${fmtDate(i.date)}</td><td style="border:1px solid #000;padding:3px;text-align:center">${i.kulDin}</td><td style="border:1px solid #000;padding:3px;text-align:center">${i.amt.toFixed(2)}</td></tr>`).join("")}</tbody>
           </table>
         </div>
       `).join("")}
@@ -3232,68 +3012,6 @@ let nregaSelected = new Set();
 let nregaShowAll = false;  // Naya variable
 let nregaFilterMode = null;  // "gt" (isse zyada) ya "lt" (isse kam)
 let nregaFilterVal = null;
-let nregaDinOverride = {};  // labourId -> user ne "Kul Divas" column me haath se jo Din likha (auto-suggestion se hatkar)
-let nregaAutoMode = true;   // true = App khud Dual-Jobcard me kitne/kaunse Naam chahiye decide kare; false = Manual (checkbox se khud chunein)
-
-// Auto Mode / Manual Mode switch — NREGA Form 10 tab me
-function setNregaMode(mode){
-  nregaAutoMode = (mode === "auto");
-  const autoBtn = $("nregaModeAuto"), manualBtn = $("nregaModeManual");
-  if(autoBtn && manualBtn){
-    if(nregaAutoMode){
-      autoBtn.style.background = "var(--green)"; autoBtn.style.color = "#fff"; autoBtn.classList.remove("btn-outline");
-      manualBtn.classList.add("btn-outline"); manualBtn.style.background = ""; manualBtn.style.color = "";
-    } else {
-      manualBtn.style.background = "var(--green)"; manualBtn.style.color = "#fff"; manualBtn.classList.remove("btn-outline");
-      autoBtn.classList.add("btn-outline"); autoBtn.style.background = ""; autoBtn.style.color = "";
-    }
-  }
-  renderNregaSearch();
-}
-
-// ⭐ Priority — Dual-Jobcard me jab sirf 1 Naam jaana ho, to Auto Mode isi Naam
-// ko chunega (jyadatar Wife ke liye use hota hai). Ek Jobcard me sirf 1 hi
-// Priority ho sakti hai.
-function toggleForm10Priority(labourId){
-  const l = DATA.labours.find(x => x.id === labourId);
-  if(!l) return;
-  const jcMembers = DATA.labours.filter(m => m.jobcardNo === l.jobcardNo);
-  const makingPriority = !l.form10Priority;
-  jcMembers.forEach(m => { m.form10Priority = (m.id === labourId) && makingPriority; });
-  persist();
-  renderNregaSearch();
-}
-
-// Dual-Jobcard ke liye Auto Mode me kitne/kaunse Naam select hone chahiye,
-// ye khud tay karta hai — priority-wale Naam ko tarjeeh deta hai.
-function autoSyncJobcardSelection(labourId, wantSelected){
-  const l = DATA.labours.find(x => x.id === labourId);
-  if(!l) return;
-  const jcMembers = DATA.labours.filter(m => m.jobcardNo === l.jobcardNo && m.status === "Active");
-  if(jcMembers.length < 2) return; // Auto-logic sirf Dual-Jobcard ke liye hai
-
-  if(!wantSelected){
-    // Is Jobcard ko Form 10 se poora hata do
-    jcMembers.forEach(m => nregaSelected.delete(m.id));
-    return;
-  }
-
-  const baaki = getJobcardBaaki(l.jobcardNo);
-  const suggestion = getJobcardNameSuggestion(baaki);
-  const priorityMember = jcMembers.find(m => m.form10Priority) || jcMembers[0];
-  const otherMembers = jcMembers.filter(m => m.id !== priorityMember.id);
-
-  jcMembers.forEach(m => nregaSelected.delete(m.id)); // group reset karke sahi se bharo
-  nregaSelected.add(priorityMember.id);
-  if(suggestion === "two") otherMembers.forEach(m => nregaSelected.add(m.id));
-  // suggestion "one" / "warn" / null (baaki<=0) — sirf Priority wala Naam
-}
-
-// User ne Form 10 table me "Kul Divas" column khud badla — agli baar wahi value dikhegi
-function setNregaDinOverride(labourId, val){
-  if(val === "" || val === null || val === undefined) delete nregaDinOverride[labourId];
-  else nregaDinOverride[labourId] = val;
-}
 
 function renderNregaSearch(){
   const term = ($("nregaSearch").value || "").trim().toLowerCase();
@@ -3330,26 +3048,10 @@ function renderNregaSearch(){
     const isDual = jcMembers.length > 1;
     const isSel = nregaSelected.has(l.id);
     const partnerSelected = isDual && !isSel && jcMembers.some(m => m.id !== l.id && nregaSelected.has(m.id));
-
-    // Baaki Din ke hisaab se suggestion — sirf Dual-Jobcard (2+ Active naam) me maayne rakhta hai
-    const suggestion = isDual ? getJobcardNameSuggestion(baaki) : null;
-    const suggestionBadge = suggestion === "one"
-      ? ' <span class="badge" style="background:#d9f2e6;color:#0f6b3f">💡 1 Naam Kaafi</span>'
-      : (suggestion === "two" ? ' <span class="badge" style="background:#d9f2e6;color:#0f6b3f">💡 2 Naam Ban Sakte Hain</span>' : "");
-
-    const priorityBtn = isDual
-      ? `<button class="star-btn ${l.form10Priority ? "active" : ""}" onclick="toggleForm10Priority('${l.id}')" title="Auto Mode me 1 Naam chahiye to ise priority di jayegi">${l.form10Priority ? "⭐" : "☆"} Priority</button>`
-      : "";
-
-    const jcSelectedAny = isDual && jcMembers.some(m => nregaSelected.has(m.id));
-    const chkOrBtn = (nregaAutoMode && isDual)
-      ? `<button class="btn ${jcSelectedAny ? "btn-red" : "btn-blue"} btn-sm" style="padding:3px 8px;font-size:11px;min-width:78px" onclick="autoToggleJobcard('${l.id}')">${jcSelectedAny ? "✖️ Hatao" : "➕ Lo"}</button>`
-      : `<input type="checkbox" class="nrega-chk" value="${l.id}" ${isSel ? "checked" : ""} onchange="toggleNregaSelect('${l.id}', this.checked)">`;
-
     return `
     <div class="chk-item">
-      ${chkOrBtn}
-      <div style="flex:1">${escapeHtml(l.name)} <span style="font-size:12px;color:var(--muted)">(Jobcard: ${escapeHtml(l.jobcardNo)})</span>${low ? ' <span class="badge" style="background:#ffe4b3;color:#8a5300">⚠️ Kam Din</span>' : ""}${partnerSelected ? ' <span class="badge" style="background:#ffe4b3;color:#8a5300">Jodidaar select, ye baaki</span>' : ""}${suggestionBadge} ${priorityBtn}</div>
+      <input type="checkbox" class="nrega-chk" value="${l.id}" ${isSel ? "checked" : ""} onchange="toggleNregaSelect('${l.id}', this.checked)">
+      <div style="flex:1">${escapeHtml(l.name)} <span style="font-size:12px;color:var(--muted)">(Jobcard: ${escapeHtml(l.jobcardNo)})</span>${low ? ' <span class="badge" style="background:#ffe4b3;color:#8a5300">⚠️ Kam Din</span>' : ""}${partnerSelected ? ' <span class="badge" style="background:#ffe4b3;color:#8a5300">Jodidaar select, ye baaki</span>' : ""}</div>
       <div style="font-size:11px;color:var(--muted);text-align:right;line-height:1.5">Hue: <b style="color:var(--green-dark)">${hue}</b><br>Baaki: <b style="color:${low ? "#c0392b" : "#b05e0d"}">${baaki}</b></div>
     </div>
   `;
@@ -3382,17 +3084,6 @@ function toggleNregaSelect(id, checked){
   if(checked) nregaSelected.add(id); else nregaSelected.delete(id);
   updateNregaSelectedCount();
   buildNregaFormTable(); // live preview
-}
-
-// Auto Mode me Dual-Jobcard ke liye ek hi button se poora Jobcard
-// Form 10 me shaamil/hataya jaata hai — app khud tay karta hai kitne/kaunse Naam.
-function autoToggleJobcard(labourId){
-  const l = DATA.labours.find(x => x.id === labourId);
-  if(!l) return;
-  const jcMembers = DATA.labours.filter(m => m.jobcardNo === l.jobcardNo && m.status === "Active");
-  const anySelected = jcMembers.some(m => nregaSelected.has(m.id));
-  autoSyncJobcardSelection(labourId, !anySelected);
-  renderNregaSearch();
 }
 
 function toggleNregaSelectAll(){
@@ -3454,52 +3145,11 @@ function buildNregaFormTable(){
   const rows = [...inSeries, ...outside];
   const skipped = Array.from(nregaSelected).length - rows.length;
 
-  // "Kul Divas" column ke liye Din suggest karta hai — Jobcard ke Baaki Din
-  // ke hisaab se (10-16 Baaki = 1 Naam, 16+ Baaki = 2 Naam me aadha-aadha baant kar).
-  // Naam ke hisaab se rows ko jobcard-wise group karke suggestion nikalta hai.
-  const jcRowIndexes = {};
-  rows.forEach((l, idx) => {
-    if(!jcRowIndexes[l.jobcardNo]) jcRowIndexes[l.jobcardNo] = [];
-    jcRowIndexes[l.jobcardNo].push(idx);
-  });
-
-  Object.keys(jcRowIndexes).forEach(jc => {
-    const idxs = jcRowIndexes[jc];
-    const baaki = getJobcardBaaki(jc);
-    const suggestion = getJobcardNameSuggestion(baaki);
-
-    if(suggestion === "one" || suggestion === "warn"){
-      // Kam Din hain — sirf pehle Naam ko poora Baaki de do, baaki naam (agar
-      // Series se bahar select kiye ho) 0 rahenge
-      idxs.forEach((idx, i) => { rows[idx].suggestedDin = i === 0 ? baaki : 0; });
-    } else if(suggestion === "two"){
-      if(idxs.length >= 2){
-        const half1 = Math.ceil(baaki / 2);
-        const half2 = baaki - half1;
-        rows[idxs[0]].suggestedDin = half1;
-        rows[idxs[1]].suggestedDin = half2;
-        for(let k = 2; k < idxs.length; k++) rows[idxs[k]].suggestedDin = 0;
-      } else {
-        rows[idxs[0]].suggestedDin = baaki;
-      }
-    } else {
-      idxs.forEach(idx => { rows[idx].suggestedDin = ""; });
-    }
-
-    // Manual override — user ne khud Din badla ho to wahi dikhega
-    idxs.forEach(idx => {
-      const ov = nregaDinOverride[rows[idx].id];
-      if(ov !== undefined && ov !== "") rows[idx].suggestedDin = ov;
-    });
-  });
-
-  // जॉब कार्ड नंबर + श्रमिक का नाम + suggested "Kul Divas" bharte hain —
-  // Kul Divas ab editable hai, hath se bhi badla ja sakta hai
+  // Sirf जॉब कार्ड नंबर + श्रमिक का नाम bharte hain — baaki column khaali (hath se bharne ke liye)
   const box = $("nregaFormTableBody");
   if(box){
     box.innerHTML = rows.map((l, i) => `
-      <tr><td>${i + 1}</td><td></td><td>${escapeHtml(l.jobcardNo)}</td><td>${escapeHtml(l.name)}</td><td></td><td></td><td></td><td></td><td></td>
-      <td><input type="number" class="nrega-din-input" value="${l.suggestedDin !== undefined ? l.suggestedDin : ""}" min="0" style="width:52px;padding:2px 4px;text-align:center" onchange="setNregaDinOverride('${l.id}', this.value); buildNregaFormTable()"></td></tr>
+      <tr><td>${i + 1}</td><td></td><td>${escapeHtml(l.jobcardNo)}</td><td>${escapeHtml(l.name)}</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
     `).join("");
   }
 
@@ -3552,7 +3202,7 @@ async function renderNregaPdfPages(pdf, rows, marginMM, pageWidthMM, pageHeightM
       const chunk = chunks[p];
       const startIndex = p * ROWS_PER_PAGE;
       const rowsHtml = chunk.map((l, i) => `
-        <tr><td>${startIndex + i + 1}</td><td></td><td>${escapeHtml(l.jobcardNo)}</td><td>${escapeHtml(l.name)}</td><td></td><td></td><td></td><td></td><td></td><td>${l.suggestedDin !== undefined && l.suggestedDin !== "" ? l.suggestedDin : ""}</td></tr>
+        <tr><td>${startIndex + i + 1}</td><td></td><td>${escapeHtml(l.jobcardNo)}</td><td>${escapeHtml(l.name)}</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
       `).join("");
 
       container.innerHTML = nregaLetterHtml(rowsHtml, p === chunks.length - 1, p + 1, chunks.length);
