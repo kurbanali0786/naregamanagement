@@ -1,3 +1,6 @@
+🆕 UPDATE 3 (v34)
+- NREGA Form 6 (प्रपत्र-6): Form 10 ke chune hue Labour ke Naam + Jobcard auto-fill (10 naam per page). Buttons: Form 10 + Form 6 (dono) / Sirf Form 10 / Sirf Form 6 / WhatsApp.
+
 🆕 UPDATE 2 (v33)
 - Khata me sirf Len-Den: "Aapko Milenge / Aap Denge" hata diya; sirf DIYE / MILE aur rakam.
 - "Comment khali" wali alag list hata di (duplicate tha) — Khata me hi ⏳ Pending dikhta hai; "Sirf Pending" filter.

@@ -3815,6 +3815,118 @@ async function downloadNregaPDF(mode){
   }
 }
 
+/* ================================================================
+   FORM 6 (प्रपत्र-6 — कार्य के लिए आवेदन पत्र) — Form 10 ke chune hue Labour ke naam
+   aur Jobcard number auto-fill hote hain (ek page par 10 naam, Form 10 ki tarah).
+   Mukhiya ka naam, pakhwada ke tick, tareekh, sign — haath se bharne ke liye khaali.
+================================================================ */
+function nregaForm6Html(chunk){
+  const fy = (typeof getCurrentFYRange === "function") ? getCurrentFYRange() : null;
+  const fyLabel = fy ? (fy.start.slice(0, 4) + "-" + String(Number(fy.start.slice(0, 4)) + 1).slice(2)) : "";
+  const N = 10;
+  const padded = chunk.slice();
+  while(padded.length < N) padded.push(null);
+  const cell = "border:1px solid #000;padding:2px 5px;height:19px";
+  const th = "border:1px solid #000;padding:2px;background:#fff;font-weight:700";
+  const nameRows = padded.map((l, i) => `<tr>
+      <td style="${cell};text-align:center;width:34px">${i + 1}</td>
+      <td style="${cell}">${l ? escapeHtml(l.name) : ""}</td>
+      <td style="${cell};width:24%"></td>
+      <td style="${cell};width:24%">${l ? escapeHtml(l.jobcardNo) : ""}</td></tr>`).join("");
+  const recRows = padded.map((l, i) => `<tr>
+      <td style="${cell};text-align:center;width:34px">${i + 1}</td>
+      <td style="${cell}">${l ? escapeHtml(l.name) : ""}</td>
+      <td style="${cell};width:38%">${l ? escapeHtml(l.jobcardNo) : ""}</td></tr>`).join("");
+  const mc = "border:1px solid #000;padding:2px;height:15px;font-size:10.5px";
+  const monthTbl = (months) => `<table style="border-collapse:collapse;font-size:10.5px;flex:1">
+      <thead><tr><th rowspan="2" style="${th}">माह</th><th colspan="2" style="${th}">पखवाड़ा</th></tr>
+      <tr><th style="${th}">प्रथम</th><th style="${th}">द्वितीय</th></tr></thead>
+      <tbody>${months.map(m => `<tr><td style="${mc}">${m}</td><td style="${mc};width:60px"></td><td style="${mc};width:60px"></td></tr>`).join("")}</tbody></table>`;
+  const m1 = ["अप्रेल","मई","जून","जुलाई"], m2 = ["अगस्त","सितम्बर","अक्टूबर","नवम्बर"], m3 = ["दिसम्बर","जनवरी","फरवरी","मार्च"];
+  const dots = (w) => `<span style="display:inline-block;border-bottom:1px dotted #000;min-width:${w}px">&nbsp;</span>`;
+  return `
+  <div style="width:760px;background:#fff;color:#000;font-family:'Hind',Arial,sans-serif;padding:14px 18px;font-size:12px;line-height:1.4;position:relative">
+    <div style="position:absolute;right:18px;top:12px;border:2px solid #000;padding:2px 10px;font-weight:700;font-size:14px">प्रपत्र - 6</div>
+    <div style="text-align:center;font-weight:700;font-size:15px;margin:0 90px">महात्मा गांधी राष्ट्रीय ग्रामीण रोजगार गारण्टी योजना, राजस्थान</div>
+    <div style="text-align:center;font-weight:700;font-size:14px;margin-top:2px">कार्य के लिए आवेदन पत्र वित्तीय वर्ष ${fyLabel || dots(80)}</div>
+    <div style="text-align:center;font-size:12px;margin-bottom:6px">( 100 दिवस के लिए व्यक्तिगत/समूह आवेदन पत्र )</div>
+    <div style="margin-bottom:4px">जिला <b>जैसलमेर</b> &nbsp; पंचायत समिति <b>जैसलमेर</b> &nbsp; ग्राम पंचायत ${dots(110)} &nbsp; ग्राम ${dots(90)}</div>
+    <div style="font-weight:600;margin-bottom:2px">व्यक्तिगत/समूह आवेदन :</div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr><th style="${th}">क्र.<br>सं.</th><th style="${th}">व्यक्तिगत/समूह में कार्य मांगने वाले<br>व्यक्तियों के नाम</th><th style="${th}">मुखिया का नाम</th><th style="${th}">जॉबकार्ड नं.</th></tr></thead>
+      <tbody>${nameRows}</tbody></table>
+    <div style="font-weight:600;margin:6px 0 2px">कार्य मांगने की अवधि :</div>
+    <div style="display:flex;gap:8px">${monthTbl(m1)}${monthTbl(m2)}${monthTbl(m3)}</div>
+    <div style="display:flex;justify-content:space-between;margin-top:14px;font-size:11.5px">
+      <div>दिनांक :- ${dots(70)}</div>
+      <div>हस्ताक्षर/अंगूठा निशानी आवेदक ${dots(100)}<br>नाम ${dots(150)}</div>
+      <div style="text-align:center">हस्ताक्षर सरपंच/ग्रा. वि. अधिकारी/<br>ग्रा. रो. सहायक/क. सहायक/वार्ड पंच</div>
+    </div>
+    <div style="font-size:11px;margin-top:6px">नोट :- 1. संबद्ध कॉलम में ( ✓ ) अंकित करें। यदि किसी भिन्न तिथि को कार्य चाहते है, तो उसमें तिथि अंकित कर दें।<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2. वर्ष में 100 दिन कार्य हेतु कम से कम 8 पखवाड़े तक काम की माँग करें।</div>
+    <div style="border-top:1px dotted #000;margin:8px 0 4px"></div>
+    <div style="text-align:center;font-weight:700;font-size:13px;margin-bottom:3px">रसीद</div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr><th style="${th}">क्र.<br>सं.</th><th style="${th}">व्यक्तिगत/समूह में कार्य मांगने वाले<br>व्यक्तियों के नाम</th><th style="${th}">जॉबकार्ड नं.</th></tr></thead>
+      <tbody>${recRows}</tbody></table>
+    <div style="font-size:11.5px;margin:6px 0 4px">निम्न व्यक्ति/समूह का महात्मा गांधी नरेगा योजनान्तर्गत रोजगार मांगने का निम्नांकित पखवाडा अवधि/दिन ${dots(110)} का आवेदन पत्र ( प्रपत्र 6 ) दिनांक ${dots(80)} को प्राप्त हुआ।</div>
+    <div style="display:flex;gap:6px">${monthTbl(["अप्रेल","मई","जून"])}${monthTbl(["जुलाई","अगस्त","सितम्बर"])}${monthTbl(["अक्टूबर","नवम्बर","दिसम्बर"])}${monthTbl(["जनवरी","फरवरी","मार्च"])}</div>
+    <div style="text-align:right;font-size:11.5px;margin-top:8px">हस्ताक्षर सरपंच/ग्रा. वि. अधिकारी/<br>ग्रा. रो. सहायक/क. सहायक/वार्ड पंच</div>
+    <div style="text-align:right;font-size:9px;color:#555;margin-top:2px">Developed by Kurban Ali</div>
+  </div>`;
+}
+
+// which: "10" = sirf Form 10, "6" = sirf Form 6, "both" = har 10 naam ka Form 10 + uske peeche Form 6
+async function downloadNregaFormsPDF(which, mode){
+  mode = mode || "download";
+  if(!nregaSelected.size){ toast("Pehle kam se kam ek Labour select karein", "error"); return; }
+  const { rows, skipped } = buildNregaFormTable();
+  if(!rows.length){ toast("Selected me se koi bhi Labour Active status me nahi hai.", "error"); return; }
+  if(typeof window.jspdf === "undefined" || typeof html2canvas === "undefined"){
+    toast("PDF library load nahi hui — Internet check karke dobara try karein", "error"); return;
+  }
+  toast("PDF taiyar ho raha hai...", "info");
+  const PER = 10;
+  const chunks = [];
+  for(let i = 0; i < rows.length; i += PER) chunks.push(rows.slice(i, i + PER));
+  const container = document.createElement("div");
+  container.style.cssText = "position:fixed;left:-10000px;top:0;background:#fff";
+  document.body.appendChild(container);
+  try{
+    const { jsPDF } = window.jspdf;
+    let pdf = null;
+    const addImg = async (html, width, orient) => {
+      container.style.width = width + "px";
+      container.innerHTML = html;
+      await new Promise(r => setTimeout(r, 60));
+      const canvas = await html2canvas(container.firstElementChild, { scale: 2, backgroundColor: "#ffffff", logging: false });
+      if(!canvas || !canvas.width) throw new Error("blank canvas");
+      if(!pdf) pdf = new jsPDF(orient, "mm", "a4"); else pdf.addPage("a4", orient);
+      const pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight(), m = 8;
+      let w = pw - m * 2, hgt = canvas.height * w / canvas.width;
+      if(hgt > ph - m * 2){ hgt = ph - m * 2; w = canvas.width * hgt / canvas.height; }
+      pdf.addImage(canvas.toDataURL("image/png", 1.0), "PNG", (pw - w) / 2, m, w, hgt);
+    };
+    for(let p = 0; p < chunks.length; p++){
+      const chunk = chunks[p];
+      if(which === "10" || which === "both"){
+        const rowsHtml = chunk.map((l, i) => `
+          <tr><td>${p * PER + i + 1}</td><td></td><td>${escapeHtml(l.jobcardNo)}</td><td>${escapeHtml(l.name)}</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`).join("");
+        await addImg(nregaLetterHtml(rowsHtml, p === chunks.length - 1, p + 1, chunks.length), 1080, "l");
+      }
+      if(which === "6" || which === "both"){
+        await addImg(nregaForm6Html(chunk), 760, "p");
+      }
+    }
+    const nm = which === "6" ? "Form6" : (which === "both" ? "Form10_Form6" : "Form10");
+    await finalizePdf(pdf, `NREGA_${nm}_${todayISO()}.pdf`, mode);
+    if(mode !== "share") toast(skipped > 0 ? `PDF Download ho gaya (${skipped} non-Active Labour skip kiye gaye)` : "PDF Download ho gaya");
+  }catch(err){
+    console.error("Form PDF error:", err);
+    toast("PDF banane me dikkat hui, dobara try karein", "error");
+  } finally { document.body.removeChild(container); }
+}
+
 function shareNregaPDF(){ downloadNregaPDF("share"); }
 
 /* ================================================================
