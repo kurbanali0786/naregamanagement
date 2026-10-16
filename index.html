@@ -348,17 +348,20 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
       <!-- ==== LABOUR KHATA (Khatabook jaisa) ==== -->
       <div class="card">
         <h3>📒 Labour Khata (Mate Share Hisaab)</h3>
-        <p style="font-size:12.5px;color:var(--muted);margin-bottom:10px">Har Labour ka apna khata — AC Credit hote hi uska <b>Mate Share baaki</b> yahan chadh jata hai. Jitna Labour ne diya (<b style="color:#146c33">🟢 Aapko Mile</b>) aur jitna aapne cash diya (<b style="color:#c0392b">🔴 Aapne Diye</b>), sab ka running balance. Naam par tap karke poora khata kholein.</p>
+        <p style="font-size:12.5px;color:var(--muted);margin-bottom:10px">Har Labour ka apna khata — AC Credit hote hi uska <b>Mate Share baaki</b> yahan chadh jata hai. Jitna Labour ne diya (<b style="color:#146c33">🟢 Mile</b>) aur jitna aapne diya (<b style="color:#c0392b">🔴 Diye</b>), sab ka running balance. Naam par tap karke poora khata kholein.</p>
         <div class="summary-grid" id="dashKhataSummary"></div>
         <div class="row mt">
           <input type="text" id="dashKhataSearch" class="grow" placeholder="🔍 Naam ya Jobcard se dhoondein" oninput="renderDashboardKhata()">
+          <label style="font-size:12.5px;white-space:nowrap"><input type="checkbox" id="dashKhataOnlyPending" onchange="renderDashboardKhata()"> ⏳ Sirf Pending</label>
         </div>
         <div class="chk-list mt" id="dashKhataList" style="max-height:420px"></div>
-      </div>
+        <div class="row mt">
+          <button class="btn btn-orange btn-sm" onclick="downloadKhataPDF()">⬇️ Sabka Khata PDF</button>
+          <button class="btn btn-sm" style="background:#25D366;color:#fff" onclick="shareKhataPDF()">📲 WhatsApp Share</button>
+        </div>
+        <button class="btn btn-outline btn-sm acc-btn mt" data-show="👷 Labour Profile History Dikhayein" data-hide="🙈 Profile History Chhupayein" onclick="toggleAcc('khataProfileBox', this)">👷 Labour Profile History Dikhayein</button>
+        <div class="collapsible acc-item" id="khataProfileBox">
 
-      <!-- ==== LABOUR PROFILE / SUMMARY (merged — ek Labour ya sabhi) ==== -->
-      <div class="card">
-        <h3>👷 Labour Profile Report (History)</h3>
         <p style="font-size:12.5px;color:var(--muted);margin-bottom:10px">Search karke ek ya kai Labour select karein (kuch bhi select na karein to Sabhi Labour aa jaayenge) — Naam, Jobcard No., Kul Demand, Kul Din, Kul Payment, Credited/Pending sab dikhega. Date range aur status (Credited/Pending/All) se bhi filter kar sakte hain.</p>
         <div class="row">
           <input type="text" id="labourProfileSearch" class="grow" placeholder="🔍 Naam ya Jobcard se dhoondein" oninput="renderLabourProfileList()">
@@ -396,7 +399,10 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
           <button class="btn btn-sm" style="background:#25D366;color:#fff" onclick="shareLabourProfileReportPDF()">📲 WhatsApp Share</button>
         </div>
         <div id="labourProfileBox" class="mt"></div>
+      
+        </div>
       </div>
+
       <div class="card">
         <h3>💾 Data Backup / Restore</h3>
         <p style="font-size:12.5px;color:var(--muted);margin-bottom:10px">Apna pura data ek JSON file me safe rakhein — Firebase kharab ho ya galti se data delete ho jaaye, to isi file se wapas load kar sakte hain.</p>
@@ -572,13 +578,6 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
           </div>
           <div class="chk-list mt" id="paymentKhataList" style="max-height:420px"></div>
 
-          <h4 style="margin:16px 0 4px;font-size:13.5px">⏳ Credited par Comment khaali <span style="font-size:12px;color:var(--muted);font-weight:400">(sirf dekhne ke liye)</span></h4>
-          <p style="font-size:12px;color:var(--muted);margin:4px 0 8px">Jin Demand ka payment <b>Credit ho chuka hai</b> lekin Comment abhi khaali hai — Labour-wise.</p>
-          <div class="row">
-            <button class="btn btn-orange btn-sm" onclick="downloadPaymentPendingPDF()">⬇️ PDF Download</button>
-            <button class="btn btn-sm" style="background:#25D366;color:#fff" onclick="sharePaymentPendingPDF()">📲 WhatsApp Share</button>
-          </div>
-          <div id="paymentPendingList" class="mt"></div>
         </div>
       </div>
 
@@ -811,7 +810,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   }
 </script>
-<script src="app.js?v=32"></script>
+<script src="app.js?v=33"></script>
 <script>
 /* Agar app.js load hi na ho (404 / internet / purani cache) to Login button "dead" lagta hai —
    user ko saaf message dikhao ki asli problem kya hai */

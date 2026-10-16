@@ -1,3 +1,8 @@
+🆕 UPDATE 2 (v33)
+- Khata me sirf Len-Den: "Aapko Milenge / Aap Denge" hata diya; sirf DIYE / MILE aur rakam.
+- "Comment khali" wali alag list hata di (duplicate tha) — Khata me hi ⏳ Pending dikhta hai; "Sirf Pending" filter.
+- Labour Profile History ab Labour Khata ke andar; har Labour ki alag PDF (Khata len-den ke saath) + sabka Khata PDF.
+
 🆕 IS ROUND KE NAYE FEATURE
 ===========================
 1. Dashboard me "📒 Labour Khata" (Khatabook jaisa): har labour ka balance, tap karo to ledger khulta hai.

@@ -590,10 +590,10 @@ function renderKhataSummaryInto(elId){
     kulMila += all[lid].kulMila;
   });
   box.innerHTML = `
-    <div class="sum-card"><div class="v" style="color:#146c33">₹${milenge.toFixed(2)}</div><div class="l">Aapko Milenge (Mate Share Baaki)</div></div>
+    <div class="sum-card"><div class="v" style="color:#146c33">₹${milenge.toFixed(2)}</div><div class="l">Kul Baaki (Mate Share)</div></div>
     <div class="sum-card"><div class="v" style="color:#b05e0d">${pendingLabour}</div><div class="l">Labour jinka baaki hai</div></div>
     <div class="sum-card"><div class="v">₹${kulMila.toFixed(2)}</div><div class="l">Ab tak Mila</div></div>
-    ${denge > 0 ? `<div class="sum-card"><div class="v" style="color:#c0392b">₹${denge.toFixed(2)}</div><div class="l">Aap Denge</div></div>` : ""}
+    ${denge > 0 ? `<div class="sum-card"><div class="v" style="color:#c0392b">₹${denge.toFixed(2)}</div><div class="l">Zyada Diya (−)</div></div>` : ""}
   `;
 }
 
@@ -607,6 +607,8 @@ function renderKhataListInto(elId, term){
   if(term){
     list = list.filter(l => l.name.toLowerCase().includes(term) || String(l.jobcardNo || "").toLowerCase().includes(term));
   }
+  const cb = $(elId.replace("List", "OnlyPending"));
+  if(cb && cb.checked) list = list.filter(l => (msMap[l.id] || { pending: 0 }).pending > 0);
   list.sort((a, b) => ((all[b.id] || EMPTY_LEDGER).balance - (all[a.id] || EMPTY_LEDGER).balance) || a.name.localeCompare(b.name));
   if(!list.length){ box.innerHTML = `<div class="empty">Koi Labour nahi mila.</div>`; return; }
 
@@ -615,7 +617,7 @@ function renderKhataListInto(elId, term){
     const bal = lg.balance;
     const cls = bal > 0 ? "credited" : (bal < 0 ? "pending" : "inactive");
     const balTxt = "₹" + Math.abs(bal).toFixed(2);
-    const sub = bal === 0 ? "Balance Barabar" : (bal > 0 ? "Aapko Milenge" : "Aap Denge");
+    const sub = bal === 0 ? "Barabar" : (bal > 0 ? "Baaki" : "Zyada Diya");
     const ms = msMap[l.id] || { mila: 0, pending: 0 };
     const msBadge = ms.pending > 0
       ? `<span class="badge pending">⏳ ${ms.pending} Pending</span>`
@@ -647,6 +649,24 @@ function renderDashboardKhata(){
    Payment Pending, dono se yahi ek modal khulta hai
 --------------------------------------------------------------- */
 let currentLedgerLabourId = null;
+let ledgerProfileOpen = false;
+function toggleLedgerProfile(){ ledgerProfileOpen = !ledgerProfileOpen; renderLedgerModal(); }
+function ledgerProfileHtml(labourId){
+  const l = DATA.labours.find(x => x.id === labourId);
+  const b = { labour: l, ...getLabourProfileRows(labourId, "", "", "All") };
+  if(!b.rows.length) return `<div class="empty">Is Labour ki koi Demand history nahi.</div>`;
+  return `<div style="max-height:260px;overflow:auto;margin-bottom:8px">${labourProfileBlockHtml(b)}</div>`;
+}
+// Ek Labour ki poori PDF (Profile history + Khata len-den)
+function downloadLabourKhataPDF(labourId, mode){
+  const l = DATA.labours.find(x => x.id === labourId);
+  if(!l) return;
+  const b = { labour: l, ...getLabourProfileRows(labourId, "", "", "All") };
+  b.ledgerRows = getLabourLedger(labourId).rows;
+  if(!b.rows.length && !b.ledgerRows.length){ toast("Is Labour ka abhi koi data nahi hai", "error"); return; }
+  lpLastReport = { blocks: [b], fromDate: "", toDate: "", statusFilter: "All" };
+  downloadLabourProfileReportPDF(mode || "download");
+}
 let ledgerEntryMode = null; // "mile" | "diye" | null (form band)
 
 function openLedgerModal(labourId){
@@ -656,6 +676,7 @@ function openLedgerModal(labourId){
   $("ledgerModalOverlay").classList.remove("hidden");
 }
 function closeLedgerModal(){
+  ledgerProfileOpen = false;
   $("ledgerModalOverlay").classList.add("hidden");
   currentLedgerLabourId = null;
   ledgerEntryMode = null;
@@ -701,12 +722,12 @@ function renderLedgerModal(){
   const dueRows = lg.rows.filter(r => r.kind === "due");
   const msMila = dueRows.filter(r => r.status === "mila").length;
   const msPending = dueRows.length - msMila;
-  const balLabel = bal === 0 ? "Balance barabar 😊" : (bal > 0 ? "Aapko Milenge" : "Aap Denge");
+  const balLabel = bal === 0 ? "Balance barabar 😊" : (bal > 0 ? "Baaki" : "Zyada Diya (−)");
   const balColor = bal > 0 ? "#146c33" : (bal < 0 ? "#b05e0d" : "#555");
 
   const formHtml = ledgerEntryMode ? `
     <div class="lg-form ${ledgerEntryMode}">
-      <div class="lg-form-title">${ledgerEntryMode === "mile" ? escapeHtml(l.name) + " ne aapko diye" : "Aapne " + escapeHtml(l.name) + " ko diye"}</div>
+      <div class="lg-form-title">${ledgerEntryMode === "mile" ? escapeHtml(l.name) + " se mile" : escapeHtml(l.name) + " ko diye"}</div>
       <div class="row">
         <div class="field grow"><label>Amount ₹</label><input type="number" id="ledgerEntryAmount" min="0" step="any" placeholder="0"></div>
         <div class="field grow"><label>Date</label><input type="date" id="ledgerEntryDate" value="${todayISO()}"></div>
@@ -725,13 +746,19 @@ function renderLedgerModal(){
       <div><div style="font-size:12px;color:var(--muted)">${balLabel}</div><div class="lg-bal" style="color:${balColor}">₹${Math.abs(bal).toFixed(2)}</div></div>
       <div style="font-size:11.5px;color:var(--muted);text-align:right;line-height:1.6">
         Kul Mate Share: <b>₹${lg.kulAaya.toFixed(2)}</b><br>
-        Aapko Mile: <b style="color:#146c33">₹${lg.kulMila.toFixed(2)}</b><br>
-        Aapne Diye: <b style="color:#c0392b">₹${lg.kulDiye.toFixed(2)}</b>
+        Mile: <b style="color:#146c33">₹${lg.kulMila.toFixed(2)}</b><br>
+        Diye: <b style="color:#c0392b">₹${lg.kulDiye.toFixed(2)}</b>
       </div>
     </div>
     <p style="font-size:12px;color:var(--muted);margin:8px 0">💬 Mate Share (Comment se): ✅ ${msMila} Mila &nbsp; ⏳ ${msPending} Pending — Comment sirf <b>📊 Report tab</b> me likhte hain.</p>
+    <div class="row" style="margin:6px 0">
+      <button class="btn btn-orange btn-sm" onclick="downloadLabourKhataPDF('${l.id}')">📄 Is Labour ki PDF</button>
+      <button class="btn btn-sm" style="background:#25D366;color:#fff" onclick="downloadLabourKhataPDF('${l.id}','share')">📲 WhatsApp</button>
+      <button class="btn btn-gray btn-sm" onclick="toggleLedgerProfile()">${ledgerProfileOpen ? "🙈 Profile Chhupayein" : "👷 Profile History"}</button>
+    </div>
+    ${ledgerProfileOpen ? ledgerProfileHtml(l.id) : ""}
     ${formHtml}
-    <div class="lg-cols"><span>ENTRIES</span><span>AAPNE DIYE</span><span>AAPKO MILE</span></div>
+    <div class="lg-cols"><span>ENTRIES</span><span>DIYE</span><span>MILE</span></div>
     <div id="ledgerRows">
       ${rows.length ? rows.map(r => `
         <div class="lg-row">
@@ -747,8 +774,8 @@ function renderLedgerModal(){
     </div>
     ${ledgerEntryMode ? "" : `
     <div class="lg-footer">
-      <button class="lg-btn diye" onclick="openLedgerEntryForm('diye')">AAPNE DIYE ₹</button>
-      <button class="lg-btn mile" onclick="openLedgerEntryForm('mile')">AAPKO MILE ₹</button>
+      <button class="lg-btn diye" onclick="openLedgerEntryForm('diye')">DIYE ₹</button>
+      <button class="lg-btn mile" onclick="openLedgerEntryForm('mile')">MILE ₹</button>
     </div>`}
   `;
 }
@@ -781,8 +808,8 @@ function khataPdfHtml(rows){
       <table style="width:100%;border-collapse:collapse">
         <thead><tr>
           <th style="${cell};background:#f0f0f0">#</th><th style="${cell};background:#f0f0f0">Naam</th><th style="${cell};background:#f0f0f0">Jobcard</th>
-          <th style="${cell};background:#f0f0f0">Kul Mate Share ₹</th><th style="${cell};background:#f0f0f0">Mila ₹</th>
-          <th style="${cell};background:#f0f0f0">Aapne Diye ₹</th><th style="${cell};background:#f0f0f0">Baaki ₹</th>
+          <th style="${cell};background:#f0f0f0">Kul Mate Share ₹</th><th style="${cell};background:#f0f0f0">Mile ₹</th>
+          <th style="${cell};background:#f0f0f0">Diye ₹</th><th style="${cell};background:#f0f0f0">Baaki ₹</th>
         </tr></thead>
         <tbody>${rows.map((r, i) => `
           <tr>
@@ -1238,6 +1265,7 @@ function labourProfileBlockHtml(b){
         <span>Kul Payment: <b>₹${b.kulPayment.toFixed(2)}</b></span>
         <span>Credited: <b>₹${b.creditedAmt.toFixed(2)}</b></span>
         <span>Pending: <b>₹${b.pendingAmt.toFixed(2)}</b></span>
+        <span>Khata Baaki: <b>₹${getLabourBalance(b.labour.id).toFixed(2)}</b></span>
       </div>
     </div>
   `;
@@ -1318,7 +1346,26 @@ function labourProfileBlockPdfHtml(b){
         Kul Demand: <b>${b.demandCount}</b> &nbsp;|&nbsp; Kul Din: <b>${b.kulDin}</b> &nbsp;|&nbsp;
         Kul Payment: <b>₹${b.kulPayment.toFixed(2)}</b> &nbsp;|&nbsp;
         Credited: <b>₹${b.creditedAmt.toFixed(2)}</b> &nbsp;|&nbsp; Pending: <b>₹${b.pendingAmt.toFixed(2)}</b>
+        ${(() => { const lg = getLabourLedger(b.labour.id); return ` &nbsp;|&nbsp; Khata: Mate Share <b>₹${lg.kulAaya.toFixed(2)}</b>, Mile <b>₹${lg.kulMila.toFixed(2)}</b>, Diye <b>₹${lg.kulDiye.toFixed(2)}</b>, Baaki <b>₹${lg.balance.toFixed(2)}</b>`; })()}
       </div>
+      ${b.ledgerRows && b.ledgerRows.length ? `
+      <div style="margin-top:6px;font-size:11px;font-weight:700">Khata (Len-Den)</div>
+      <table style="width:100%;border-collapse:collapse;font-size:10.5px;margin-top:3px">
+        <thead><tr>
+          <th style="border:1px solid #000;padding:4px;background:#f0f0f0">Date</th>
+          <th style="border:1px solid #000;padding:4px;background:#f0f0f0">Details</th>
+          <th style="border:1px solid #000;padding:4px;background:#f0f0f0">Diye ₹</th>
+          <th style="border:1px solid #000;padding:4px;background:#f0f0f0">Mile ₹</th>
+          <th style="border:1px solid #000;padding:4px;background:#f0f0f0">Baaki ₹</th>
+        </tr></thead>
+        <tbody>${b.ledgerRows.map(r => `<tr>
+          <td style="border:1px solid #000;padding:4px;text-align:center">${fmtDate(r.date)}</td>
+          <td style="border:1px solid #000;padding:4px">${r.kind === "due" ? "Mate Share" : ""} ${r.comment ? escapeHtml(r.comment) : ""}</td>
+          <td style="border:1px solid #000;padding:4px;text-align:right">${r.kind === "mile" ? "" : r.amount.toFixed(2)}</td>
+          <td style="border:1px solid #000;padding:4px;text-align:right">${r.kind === "mile" ? r.amount.toFixed(2) : ""}</td>
+          <td style="border:1px solid #000;padding:4px;text-align:right">${r.balanceAfter.toFixed(2)}</td>
+        </tr>`).join("")}</tbody>
+      </table>` : ""}
     </div>`;
 }
 
@@ -1371,6 +1418,7 @@ async function downloadLabourProfileReportPDF(mode){
           chunks.push(labourProfileBlockPdfHtml({
             ...b,
             rows: b.rows.slice(i * MAX_ROWS_PER_CHUNK, (i + 1) * MAX_ROWS_PER_CHUNK),
+            ledgerRows: i === total - 1 ? b.ledgerRows : null,
             partLabel: ` (Part ${i + 1}/${total})`
           }));
         }
@@ -2786,27 +2834,6 @@ function renderPaymentPending(){
   renderKhataSummaryInto("paymentKhataSummary");
   renderKhataListInto("paymentKhataList", $("paymentKhataSearch") ? $("paymentKhataSearch").value : "");
 
-  // Neeche: Credited par Comment khaali wali entries (sirf dekhne ke liye — Comment Report tab me likhein)
-  const box = $("paymentPendingList");
-  if(!box) return;
-  const { groups, bulkTotal, bulkCount } = getPaymentPendingData();
-
-  if(!groups.length){ box.innerHTML = `<div class="empty">Koi Credited entry aisi nahi jiska Comment khaali ho. 🎉</div>`; return; }
-
-  let html = groups.map(g => `
-    <div class="pp-block">
-      <div class="pp-head"><span>${escapeHtml(g.labour.name || "—")}</span><span>₹${g.total.toFixed(2)}</span></div>
-      ${g.items.map(i => `
-        <div class="pp-item">
-          <span>${fmtDate(i.date)} · ${i.kulDin} Din · ₹${i.amt.toFixed(2)}</span>
-          <span class="badge pending">⏳ Comment khaali</span>
-        </div>
-      `).join("")}
-    </div>
-  `).join("");
-
-  html += `<div class="pp-bulk"><div class="v">₹${bulkTotal.toFixed(2)}</div><div style="font-size:11px">Bulk Pending Total — ${bulkCount} Entries</div></div>`;
-  box.innerHTML = html;
 }
 
 // Payment Pending list se seedha comment likh kar Save karne ke liye
