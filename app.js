@@ -582,6 +582,7 @@ function addManualLedgerEntry(labourId, type, amount, comment, date){
 function renderKhataSummaryInto(elId){
   const box = $(elId);
   if(!box) return;
+  box.innerHTML = ""; return; // upar ke Baaki cards ab nahi dikhte — sirf Labour ki list
   const all = computeLedgers();
   let milenge = 0, denge = 0, kulMila = 0, pendingLabour = 0;
   Object.keys(all).forEach(lid => {
@@ -3817,13 +3818,13 @@ async function downloadNregaPDF(mode){
 
 /* ================================================================
    FORM 6 (प्रपत्र-6 — कार्य के लिए आवेदन पत्र) — Form 10 ke chune hue Labour ke naam
-   aur Jobcard number auto-fill hote hain (ek page par 10 naam, Form 10 ki tarah).
+   aur Jobcard number auto-fill hote hain (ek page par 5 naam — original Form 6 ki tarah).
    Mukhiya ka naam, pakhwada ke tick, tareekh, sign — haath se bharne ke liye khaali.
 ================================================================ */
 function nregaForm6Html(chunk){
   const fy = (typeof getCurrentFYRange === "function") ? getCurrentFYRange() : null;
   const fyLabel = fy ? (fy.start.slice(0, 4) + "-" + String(Number(fy.start.slice(0, 4)) + 1).slice(2)) : "";
-  const N = 10;
+  const N = 5;
   const padded = chunk.slice();
   while(padded.length < N) padded.push(null);
   const cell = "border:1px solid #000;padding:2px 5px;height:19px";
@@ -3915,7 +3916,7 @@ async function downloadNregaFormsPDF(which, mode){
         await addImg(nregaLetterHtml(rowsHtml, p === chunks.length - 1, p + 1, chunks.length), 1080, "l");
       }
       if(which === "6" || which === "both"){
-        await addImg(nregaForm6Html(chunk), 760, "p");
+        for(let k = 0; k < chunk.length; k += 5) await addImg(nregaForm6Html(chunk.slice(k, k + 5)), 760, "p");
       }
     }
     const nm = which === "6" ? "Form6" : (which === "both" ? "Form10_Form6" : "Form10");
