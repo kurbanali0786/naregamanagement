@@ -564,24 +564,6 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
       </div>
 
       <div class="card">
-        <h3>⏳ Payment Pending — Khata</h3>
-        <button class="btn btn-outline btn-sm acc-btn" data-show="⏳ Payment Pending Dikhayein" data-hide="🙈 Payment Pending Chhupayein" onclick="toggleAcc('paymentPendingBox', this)">⏳ Payment Pending Dikhayein</button>
-        <div class="collapsible acc-item" id="paymentPendingBox">
-          <p style="font-size:12px;color:var(--muted);margin:8px 0">Mate Share ka poora khata. Naam par tap karke us Labour ka Khatabook jaisa ledger khulta hai. <b>Diya</b> 🏦 AC Credit ya 📊 Report tab me bharte hain, <b>Comment</b> sirf 📊 Report tab me.</p>
-          <div class="row">
-            <button class="btn btn-orange btn-sm" onclick="downloadKhataPDF()">⬇️ Khata Baaki PDF</button>
-            <button class="btn btn-sm" style="background:#25D366;color:#fff" onclick="shareKhataPDF()">📲 WhatsApp Share</button>
-          </div>
-          <div class="summary-grid mt" id="paymentKhataSummary"></div>
-          <div class="row mt">
-            <input type="text" id="paymentKhataSearch" class="grow" placeholder="🔍 Naam ya Jobcard se dhoondein" oninput="renderPaymentPending()">
-          </div>
-          <div class="chk-list mt" id="paymentKhataList" style="max-height:420px"></div>
-
-        </div>
-      </div>
-
-      <div class="card">
         <h3>🗂️ Demand List (Past) <span id="demandCount" style="font-size:12.5px;color:var(--muted);font-weight:400"></span></h3>
         <button class="btn btn-outline btn-sm acc-btn" data-show="🗂️ Demand List Dikhayein" data-hide="🙈 Demand List Chhupayein" onclick="toggleAcc('demandListBox', this)">🗂️ Demand List Dikhayein</button>
         <div class="collapsible acc-item" id="demandListBox">
@@ -638,7 +620,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
             <tbody id="acTableBody"></tbody>
           </table>
         </div>
-        <p style="font-size:12px;color:var(--muted);margin-top:8px"><b>Diya ₹</b>: Labour ne Mate Share me se jitna aapko diya wo likhein (khaali ya 0 = abhi nahi mila). Ye seedha 📒 Khata me chadh jata hai. <b>Mate Status</b> Comment se aata hai: khaali = ⏳ Pending, kuch likha = ✅ Mila.</p>
+        <p style="font-size:12px;color:var(--muted);margin-top:8px"><b>Diya ₹</b> sirf dikhta hai — Labour ne kitna diya wo 📒 Khata me <b>🟢 MILE ₹</b> se likhein (paisa ek hi jagah se ghatega). <b>Mate Status</b> Comment se aata hai: khaali = ⏳ Pending, kuch likha = ✅ Mila.</p>
         <div id="acEmpty" class="empty">Koi payment nahi.</div>
       </div>
     </div>
@@ -662,7 +644,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
             <input type="checkbox" id="reportSortBaaki" onchange="generateReport()"> Sabse Zyada Baaki Pehle
           </label>
         </div>
-        <p style="font-size:12px;color:var(--muted);margin-top:6px">ℹ️ Yahin se <b>Comment</b> likhein aur <b>Diya</b> (Labour ne kitna diya) bharein — sab ek hi jagah. Print / PDF me ye sab aata hai.</p>
+        <p style="font-size:12px;color:var(--muted);margin-top:6px">ℹ️ Yahin se <b>Comment</b> likhein. Labour ne kitna diya wo 📒 Khata me <b>🟢 MILE ₹</b> se likhein. Print / PDF me ye sab aata hai.</p>
         <div class="row mt">
           <button class="btn btn-blue btn-sm" onclick="printReport()">🖨️ Print</button>
           <button class="btn btn-orange btn-sm" onclick="downloadReportPDF()">⬇️ PDF Download</button>
@@ -812,7 +794,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   }
 </script>
-<script src="app.js?v=35"></script>
+<script src="app.js?v=37"></script>
 <script>
 /* Agar app.js load hi na ho (404 / internet / purani cache) to Login button "dead" lagta hai —
    user ko saaf message dikhao ki asli problem kya hai */

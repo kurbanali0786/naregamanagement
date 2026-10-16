@@ -1001,7 +1001,6 @@ function renderDashboard(){
     <div class="sum-card"><div class="v">₹${creditedAmount.toFixed(2)}</div><div class="l">AC Credited (₹)</div></div>
     <div class="sum-card"><div class="v">₹${pendingAmount.toFixed(2)}</div><div class="l">AC Pending (₹)</div></div>
     <div class="sum-card"><div class="v">₹${creditedMateShare.toFixed(2)}</div><div class="l">Mate Share (Credited)</div></div>
-    <div class="sum-card"><div class="v" style="color:#c0392b">₹${mateBaakiTotal.toFixed(2)}</div><div class="l">Mate Share Baaki (Khata)</div></div>
   `;
 }
 
@@ -3087,7 +3086,7 @@ function renderACList(){
         <td>₹${p.amount}</td>
         <td>₹${mate.toFixed(2)}</td>
         <td>${credited
-          ? `<input type="number" class="att-in" style="width:84px" min="0" step="any" value="${ac && ac.diya ? ac.diya : ""}" placeholder="0" onchange="updateACDiya('${p.id}', this.value)">`
+          ? (ac && ac.diya ? "₹" + ac.diya : "—")
           : `<span style="color:var(--muted);font-size:12px">—</span>`}</td>
         <td>${credited
           ? (mStatus === "mila" ? `<span class="badge credited">✅ Mila</span>` : `<span class="badge pending">⏳ Pending</span>`)
@@ -3176,6 +3175,7 @@ function creditAC(paymentId){
   persist();
   renderACList();
   renderDemands();
+  refreshPaymentViews(); // Khata, Report, Dashboard bhi turant update
   toast("AC Credit ho gaya");
 }
 
@@ -3198,6 +3198,7 @@ function undoACCredit(paymentId){
   persist();
   renderACList();
   renderDemands();
+  refreshPaymentViews(); // Khata, Report, Dashboard bhi turant update
   toast("AC Credit wapas Pending kar diya");
 }
 
@@ -3208,6 +3209,7 @@ function bulkACCredit(){
   persist();
   renderACList();
   renderDemands();
+  refreshPaymentViews(); // Khata, Report, Dashboard bhi turant update
   toast(`${checked.length} AC Credit ho gaya`);
 }
 
@@ -3221,6 +3223,7 @@ function bulkUndoACCredit(){
   persist();
   renderACList();
   renderDemands();
+  refreshPaymentViews(); // Khata, Report, Dashboard bhi turant update
   toast(`${checked.length} AC Credit wapas Pending kar diya`);
 }
 
@@ -3305,7 +3308,7 @@ function generateReport(){
         <td class="nw">${p ? "₹" + p.amount : "—"}</td>
         <td class="nw">${p ? "₹" + r.mate.toFixed(2) : "—"}</td>
         <td class="nw">${r.credited && p
-          ? `<input type="number" class="att-in" style="width:78px" min="0" step="any" value="${r.diya || ""}" placeholder="0" onchange="updateACDiya('${p.id}', this.value)">`
+          ? (r.diya ? "₹" + r.diya : "—")
           : "—"}</td>
         <td class="nw" style="font-weight:700;color:${r.baaki > 0 ? "#c0392b" : "#146c33"}">${r.credited ? (r.baaki > 0 ? "₹" + r.baaki.toFixed(2) : "✅") : "—"}</td>
         <td class="nw">${r.mateStatus === "mila" ? `<span class="badge credited">✅ Mila</span>` : (r.mateStatus === "pending" ? `<span class="badge pending">⏳ Pending</span>` : "—")}</td>

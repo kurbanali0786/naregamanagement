@@ -1,3 +1,7 @@
+🧹 v37: Diya ab sirf Khata ki 🟢 MILE entry se (AC Credit/Report me sirf dikhta hai); Payment Pending card aur Dashboard ka duplicate Mate Share Baaki card hata diya.
+
+🛠 v36: AC Credit / Undo karte hi Khata list turant update hoti hai (pehle refresh ke baad dikhti thi).
+
 🆕 UPDATE 3 (v34)
 - NREGA Form 6 (प्रपत्र-6): Form 10 ke chune hue Labour ke Naam + Jobcard auto-fill (5 naam per page, original jaisa); Khata ke upar ke Baaki cards hata diye (v35). Buttons: Form 10 + Form 6 (dono) / Sirf Form 10 / Sirf Form 6 / WhatsApp.
 
