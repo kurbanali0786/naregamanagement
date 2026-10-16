@@ -1,3 +1,16 @@
+🆕 IS ROUND KE NAYE FEATURE
+===========================
+1. Dashboard me "📒 Labour Khata" (Khatabook jaisa): har labour ka balance, tap karo to ledger khulta hai.
+   - Mate Share (50%) jab AC Credit hota hai to labour ke khate me "Aapko Milenge" me judta hai.
+   - Labour ne jo "Diya" diya wo "Aapko Mile" (hara) me ghatta hai.
+   - Neeche 🔴 Aapne Diye / 🟢 Aapko Mile se manual entry (amount, details, date).
+2. AC Credit tab: Kul ₹ | Mate Share ₹ | Diya ₹ | Mate Status (✅ Mila / ⏳ Pending). Diya sirf Credited row me.
+3. Comment sirf Report tab se edit hota hai (Demand List me ab sirf dikhta hai). Bulk comment pehle jaisa.
+4. Payment Pending = khata view + "Khata Baaki PDF/WhatsApp". Comment khali wali list neeche.
+5. Report: Diya, Baaki, Mate Status, "Sirf Pending", "Sabse Zyada Baaki Pehle", PDF/Print me bhi.
+6. NREGA Form 10: Auto/Manual mode + ⭐ Priority (baaki 10-16 = 1 naam, 16 se zyada = 2 naam, 10 se kam = 1 naam + warning).
+7. Cache v30 / app.js?v=32 (naya version lene ke liye hard refresh karo).
+
 ═══════════════════════════════════════════════════════════════
   Labour Job Card System — UPDATED VERSION
   Developed by Kurban Ali

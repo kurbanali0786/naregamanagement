@@ -98,12 +98,7 @@ table{width:100%;border-collapse:collapse;font-size:13px;min-width:520px}
 /* Report table — kul-divas/pratidin/kul-bhugtan/credit-date columns content ke
    hisaab se hi chaudi ho, wrap na ho, center me ho — taaki print/PDF me
    zyada rows ek page me fit ho sakein */
-.report-table th:nth-child(1), .report-table td:nth-child(1),
-.report-table th:nth-child(4), .report-table td:nth-child(4),
-.report-table th:nth-child(5), .report-table td:nth-child(5),
-.report-table th:nth-child(6), .report-table td:nth-child(6),
-.report-table th:nth-child(7), .report-table td:nth-child(7),
-.report-table th:nth-child(8), .report-table td:nth-child(8){
+.report-table th.nw, .report-table td.nw{
   width:1%; white-space:nowrap; text-align:center;
 }
 th,td{padding:10px 10px;border-bottom:1px solid #e8eee9;text-align:left;vertical-align:middle}
@@ -208,6 +203,34 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
 .lp-quick-btn.active{background:var(--green);color:#fff}
 .sel-count{font-size:12px;color:var(--muted)}
 
+/* ---------- KHATA / LEDGER (Khatabook jaisa) ---------- */
+.star-btn{background:none;border:none;font-size:22px;line-height:1;color:#c9c9c9;cursor:pointer;padding:2px 6px}
+.star-btn.active{color:#f5a623}
+.lg-balcard{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--green-light);border-radius:12px;padding:12px 14px}
+.lg-bal{font-size:24px;font-weight:800}
+.lg-cols{display:flex;gap:6px;font-size:10.5px;font-weight:700;color:var(--muted);letter-spacing:.04em;margin:14px 0 6px;padding:0 4px}
+.lg-cols span:nth-child(1){flex:1}
+.lg-cols span:nth-child(2),.lg-cols span:nth-child(3){width:78px;text-align:right}
+.lg-row{display:flex;gap:6px;align-items:stretch;border:1px solid #e3ebe5;border-radius:10px;margin-bottom:8px;background:#fff;overflow:hidden}
+.lg-main{flex:1;min-width:0;padding:9px 10px;position:relative}
+.lg-date{font-size:11.5px;color:var(--muted)}
+.lg-chip{display:inline-block;font-size:10.5px;background:#f1f3f2;color:#555;padding:1px 8px;border-radius:20px;margin-top:3px}
+.lg-note{font-size:13px;margin-top:4px;word-break:break-word}
+.lg-del{position:absolute;right:4px;bottom:4px;background:none;border:none;font-size:13px;cursor:pointer;opacity:.6}
+.lg-amt{width:78px;display:flex;align-items:center;justify-content:flex-end;padding:0 8px;font-weight:800;font-size:13.5px}
+.lg-amt.diye{color:#c0392b;background:#faf6f5}
+.lg-amt.mile{color:#146c33;background:#f3faf5}
+.lg-footer{position:sticky;bottom:-22px;display:flex;gap:8px;margin:14px -22px -22px;padding:10px 14px;background:#fff;border-top:1px solid #e3ebe5}
+.lg-btn{flex:1;border:none;border-radius:10px;padding:13px 6px;font-weight:800;font-size:14px;color:#fff;cursor:pointer}
+.lg-btn.diye{background:#c0392b}
+.lg-btn.mile{background:#146c33}
+.lg-form{border:2px solid;border-radius:12px;padding:12px;margin-top:12px}
+.lg-form.mile{border-color:#146c33}
+.lg-form.diye{border-color:#c0392b}
+.lg-form-title{font-weight:800;margin-bottom:10px}
+.lg-form.mile .lg-form-title{color:#146c33}
+.lg-form.diye .lg-form-title{color:#c0392b}
+
 /* ---------- PRINT ---------- */
 @media print{
   body{background:#fff}
@@ -225,7 +248,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
   body.print-lp #labourProfileBox{position:absolute;left:0;top:0;width:100%}
   .att-in,.rep-comment{border:none;padding:2px;font-size:11px}
   .rep-comment::placeholder{color:transparent}
-  .no-comments th:nth-child(9),.no-comments td:nth-child(9){display:none}
+  .no-comments .c-comment{display:none}
   .no-print{display:none!important}
   table{min-width:0}
   .card,.table-wrap{border:none;box-shadow:none}
@@ -322,9 +345,20 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
         <div class="summary-grid mt" id="dashboardSummary"></div>
       </div>
 
+      <!-- ==== LABOUR KHATA (Khatabook jaisa) ==== -->
+      <div class="card">
+        <h3>📒 Labour Khata (Mate Share Hisaab)</h3>
+        <p style="font-size:12.5px;color:var(--muted);margin-bottom:10px">Har Labour ka apna khata — AC Credit hote hi uska <b>Mate Share baaki</b> yahan chadh jata hai. Jitna Labour ne diya (<b style="color:#146c33">🟢 Aapko Mile</b>) aur jitna aapne cash diya (<b style="color:#c0392b">🔴 Aapne Diye</b>), sab ka running balance. Naam par tap karke poora khata kholein.</p>
+        <div class="summary-grid" id="dashKhataSummary"></div>
+        <div class="row mt">
+          <input type="text" id="dashKhataSearch" class="grow" placeholder="🔍 Naam ya Jobcard se dhoondein" oninput="renderDashboardKhata()">
+        </div>
+        <div class="chk-list mt" id="dashKhataList" style="max-height:420px"></div>
+      </div>
+
       <!-- ==== LABOUR PROFILE / SUMMARY (merged — ek Labour ya sabhi) ==== -->
       <div class="card">
-        <h3>👷 Labour Profile / Summary</h3>
+        <h3>👷 Labour Profile Report (History)</h3>
         <p style="font-size:12.5px;color:var(--muted);margin-bottom:10px">Search karke ek ya kai Labour select karein (kuch bhi select na karein to Sabhi Labour aa jaayenge) — Naam, Jobcard No., Kul Demand, Kul Din, Kul Payment, Credited/Pending sab dikhega. Date range aur status (Credited/Pending/All) se bhi filter kar sakte hain.</p>
         <div class="row">
           <input type="text" id="labourProfileSearch" class="grow" placeholder="🔍 Naam ya Jobcard se dhoondein" oninput="renderLabourProfileList()">
@@ -524,10 +558,22 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
       </div>
 
       <div class="card">
-        <h3>⏳ Payment Pending <span style="font-size:12.5px;color:var(--muted);font-weight:400">(Khaali Comment)</span></h3>
+        <h3>⏳ Payment Pending — Khata</h3>
         <button class="btn btn-outline btn-sm acc-btn" data-show="⏳ Payment Pending Dikhayein" data-hide="🙈 Payment Pending Chhupayein" onclick="toggleAcc('paymentPendingBox', this)">⏳ Payment Pending Dikhayein</button>
         <div class="collapsible acc-item" id="paymentPendingBox">
-          <p style="font-size:12px;color:var(--muted);margin:8px 0">Jin Demand ka payment <b>Credit ho chuka hai</b> lekin Comment abhi bhi khaali hai (Pending waalon ka comment khaali hona normal hai, wo yahan nahi aate) — Labour-wise group ho kar aati hain.</p>
+          <p style="font-size:12px;color:var(--muted);margin:8px 0">Mate Share ka poora khata. Naam par tap karke us Labour ka Khatabook jaisa ledger khulta hai. <b>Diya</b> 🏦 AC Credit ya 📊 Report tab me bharte hain, <b>Comment</b> sirf 📊 Report tab me.</p>
+          <div class="row">
+            <button class="btn btn-orange btn-sm" onclick="downloadKhataPDF()">⬇️ Khata Baaki PDF</button>
+            <button class="btn btn-sm" style="background:#25D366;color:#fff" onclick="shareKhataPDF()">📲 WhatsApp Share</button>
+          </div>
+          <div class="summary-grid mt" id="paymentKhataSummary"></div>
+          <div class="row mt">
+            <input type="text" id="paymentKhataSearch" class="grow" placeholder="🔍 Naam ya Jobcard se dhoondein" oninput="renderPaymentPending()">
+          </div>
+          <div class="chk-list mt" id="paymentKhataList" style="max-height:420px"></div>
+
+          <h4 style="margin:16px 0 4px;font-size:13.5px">⏳ Credited par Comment khaali <span style="font-size:12px;color:var(--muted);font-weight:400">(sirf dekhne ke liye)</span></h4>
+          <p style="font-size:12px;color:var(--muted);margin:4px 0 8px">Jin Demand ka payment <b>Credit ho chuka hai</b> lekin Comment abhi khaali hai — Labour-wise.</p>
           <div class="row">
             <button class="btn btn-orange btn-sm" onclick="downloadPaymentPendingPDF()">⬇️ PDF Download</button>
             <button class="btn btn-sm" style="background:#25D366;color:#fff" onclick="sharePaymentPendingPDF()">📲 WhatsApp Share</button>
@@ -547,7 +593,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
           <button class="btn btn-red btn-sm" onclick="bulkDeleteDemands()">🗑️ Bulk Delete Selected</button>
           <button class="btn btn-gray btn-sm" onclick="manualRefresh('past')">🔄 Refresh</button>
         </div>
-        <p style="font-size:12px;color:var(--muted);margin-top:8px">ℹ️ <b>Credit Status / Credit Date</b> ko bulk me 🏦 <b>AC Credit</b> tab se update karein. <button class="btn btn-blue btn-sm" onclick="switchTab('accredit')">🏦 Kholein</button></p>
+        <p style="font-size:12px;color:var(--muted);margin-top:8px">ℹ️ <b>Credit Status / Credit Date</b> ko bulk me 🏦 <b>AC Credit</b> tab se update karein. Ek-ek Comment 📊 <b>Report</b> tab me likhein; yahan <b>Bulk Comment</b> se ek saath bhi laga sakte hain. <button class="btn btn-blue btn-sm" onclick="switchTab('accredit')">🏦 Kholein</button></p>
                 <div class="row mt" style="background:linear-gradient(135deg,var(--green-light),#fff);padding:12px;border-radius:10px;border:1.5px dashed var(--green-mid);align-items:flex-start;flex-wrap:wrap">
           <div class="field grow" style="margin-bottom:0;min-width:200px">
             <label style="font-size:12.5px;color:var(--green);font-weight:700">💬 Bulk Comment — Demand table se select karein, yahan likhein</label>
@@ -589,10 +635,11 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
         </div>
         <div class="table-wrap mt">
           <table>
-            <thead><tr><th><input type="checkbox" class="hidden"></th><th style="width:36px;text-align:center">#</th><th>Date</th><th>Jobcard</th><th>Name</th><th>Amount ₹</th><th>Status / Credited Date</th><th>Action</th></tr></thead>
+            <thead><tr><th><input type="checkbox" class="hidden"></th><th style="width:36px;text-align:center">#</th><th>Date</th><th>Jobcard</th><th>Name</th><th>Kul ₹</th><th>Mate Share ₹</th><th>Diya ₹</th><th>Mate Status</th><th>Status / Credited Date</th><th>Action</th></tr></thead>
             <tbody id="acTableBody"></tbody>
           </table>
         </div>
+        <p style="font-size:12px;color:var(--muted);margin-top:8px"><b>Diya ₹</b>: Labour ne Mate Share me se jitna aapko diya wo likhein (khaali ya 0 = abhi nahi mila). Ye seedha 📒 Khata me chadh jata hai. <b>Mate Status</b> Comment se aata hai: khaali = ⏳ Pending, kuch likha = ✅ Mila.</p>
         <div id="acEmpty" class="empty">Koi payment nahi.</div>
       </div>
     </div>
@@ -609,7 +656,14 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
           <label style="font-size:13.5px;display:flex;align-items:center;gap:8px;font-weight:600">
             <input type="checkbox" id="reportOnlyCredited" onchange="generateReport()"> Sirf AC Credited entries dikhayein
           </label>
+          <label style="font-size:13.5px;display:flex;align-items:center;gap:8px;font-weight:600">
+            <input type="checkbox" id="reportOnlyPending" onchange="generateReport()"> Sirf Pending dikhayein (Comment khaali)
+          </label>
+          <label style="font-size:13.5px;display:flex;align-items:center;gap:8px;font-weight:600">
+            <input type="checkbox" id="reportSortBaaki" onchange="generateReport()"> Sabse Zyada Baaki Pehle
+          </label>
         </div>
+        <p style="font-size:12px;color:var(--muted);margin-top:6px">ℹ️ Yahin se <b>Comment</b> likhein aur <b>Diya</b> (Labour ne kitna diya) bharein — sab ek hi jagah. Print / PDF me ye sab aata hai.</p>
         <div class="row mt">
           <button class="btn btn-blue btn-sm" onclick="printReport()">🖨️ Print</button>
           <button class="btn btn-orange btn-sm" onclick="downloadReportPDF()">⬇️ PDF Download</button>
@@ -622,7 +676,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
         <div class="summary-grid" id="reportSummary"></div>
         <div class="table-wrap mt">
           <table class="report-table">
-            <thead><tr><th>#</th><th>Name</th><th>Jobcard No.</th><th>Kul Divas</th><th>Pratidin ₹</th><th>Kul Bhugtan ₹</th><th>Status</th><th>Credit</th><th>Comment</th></tr></thead>
+            <thead><tr><th class="nw">#</th><th>Name</th><th>Jobcard No.</th><th class="nw">Kul Divas</th><th class="nw">Pratidin ₹</th><th class="nw">Kul Bhugtan ₹</th><th class="nw">Mate ₹</th><th class="nw">Diya ₹</th><th class="nw">Baaki ₹</th><th class="nw">Mate Status</th><th class="nw">AC Status</th><th class="nw">Credit</th><th class="c-comment">Comment</th></tr></thead>
             <tbody id="reportTableBody"></tbody>
           </table>
         </div>
@@ -637,6 +691,12 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
         <div class="row">
           <input type="text" id="nregaSearch" class="grow" placeholder="🔍 Naam / Jobcard se search karein" oninput="renderNregaSearch()">
         </div>
+        <div class="row mt">
+          <span style="font-size:12.5px;font-weight:700">Mode:</span>
+          <button class="btn btn-sm btn-green" id="btnNregaAuto" onclick="setNregaMode('auto')">⚙️ Auto</button>
+          <button class="btn btn-sm btn-outline" id="btnNregaManual" onclick="setNregaMode('manual')">✋ Manual</button>
+        </div>
+        <p style="font-size:12px;color:var(--muted);margin-top:6px"><b>Auto:</b> Jodi (2 naam wale Jobcard) me baaki din dekh kar app khud 1 ya 2 naam chunta hai — baaki 10 se 16 din ho to sirf 1 naam (⭐ Priority wala, aksar patni), 16 se zyada ho to dono. <b>Manual:</b> aap khud chunte ho. ★ dabakar Priority naam set karein.</p>
         <div class="row mt">
           <select id="nregaFilterMode">
             <option value="gt">Hajri — Isse Zyada</option>
@@ -700,6 +760,14 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
   <footer class="app-footer">Developed by <b>Kurban Ali</b></footer>
 </div>
 
+<!-- ============ LABOUR KHATA / LEDGER (Khatabook jaisa) ============ -->
+<div id="ledgerModalOverlay" class="modal-overlay-lg hidden">
+  <div class="modal-lg">
+    <button class="close-x" onclick="closeLedgerModal()">✖️</button>
+    <div id="ledgerModalBody"></div>
+  </div>
+</div>
+
 <!-- ============ RECYCLE BIN (popup, header button se khulta hai) ============ -->
 <div id="trashModalOverlay" class="modal-overlay-lg hidden">
   <div class="modal-lg">
@@ -743,7 +811,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   }
 </script>
-<script src="app.js?v=31"></script>
+<script src="app.js?v=32"></script>
 <script>
 /* Agar app.js load hi na ho (404 / internet / purani cache) to Login button "dead" lagta hai —
    user ko saaf message dikhao ki asli problem kya hai */

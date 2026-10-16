@@ -52,8 +52,9 @@ let DATA = {
   labours: [],   // {id, jobcardNo, name, aadhar, status}
   demands: [],   // {id, date, labourId}
   payments: [],  // {id, date, labourId, amount, mateShare, labourShare}
-  acCredits: [], // {id, date, labourId, status}
-  trash: []      // {id, type: 'labour'|'demand'|'payment', data, cascade, deletedAt}
+  acCredits: [], // {id, date, labourId, status, diya}
+  trash: [],     // {id, type: 'labour'|'demand'|'payment', data, cascade, deletedAt}
+  ledger: []     // {id, labourId, date, type:'mile'|'diye', amount, comment, balanceAfter} — Labour Khata
 };
 
 const LS_KEY_PREFIX = "labour_jobcard_data_v1_";
@@ -363,7 +364,7 @@ firebase.auth().onAuthStateChanged(user => {
     currentUser = null;
     $("authScreen").classList.remove("hidden");
     $("appScreen").classList.add("hidden");
-    DATA = { labours: [], demands: [], payments: [], acCredits: [], trash: [] };
+    DATA = { labours: [], demands: [], payments: [], acCredits: [], trash: [], ledger: [] };
   }
 });
 } else {
@@ -395,7 +396,8 @@ function initStorage(uid){
         demands: toArray(val && val.demands),
         payments: toArray(val && val.payments),
         acCredits: toArray(val && val.acCredits),
-        trash: toArray(val && val.trash)
+        trash: toArray(val && val.trash),
+        ledger: toArray(val && val.ledger)
       };
       renderAll();
     }, err => {
@@ -419,11 +421,12 @@ function fallbackToLocalStorage(uid){
         demands: toArray(parsed.demands),
         payments: toArray(parsed.payments),
         acCredits: toArray(parsed.acCredits),
-        trash: toArray(parsed.trash)
+        trash: toArray(parsed.trash),
+        ledger: toArray(parsed.ledger)
       };
     } catch(e){ console.warn("LocalStorage parse error", e); }
   } else {
-    DATA = { labours: [], demands: [], payments: [], acCredits: [], trash: [] };
+    DATA = { labours: [], demands: [], payments: [], acCredits: [], trash: [], ledger: [] };
   }
   renderAll();
   toast("Offline Mode — LocalStorage me save ho raha hai", "info");
@@ -438,6 +441,7 @@ function persist(){
   DATA.payments = toArray(DATA.payments);
   DATA.acCredits = toArray(DATA.acCredits);
   DATA.trash = toArray(DATA.trash);
+  DATA.ledger = toArray(DATA.ledger);
 
   if(firebaseEnabled && dbRef){
     dbRef.set(DATA).catch(err => {
@@ -471,6 +475,7 @@ function repairMateShare(){
 function renderAll(){
   repairMateShare();
   renderDashboard();
+  renderDashboardKhata();
   renderLabourProfileList();
   renderLabours();
   renderDemandLabourList();
@@ -480,6 +485,365 @@ function renderAll(){
   renderNregaSearch();
   buildNregaFormTable();
 }
+
+/* ================================================================
+   📒 LABOUR KHATA / LEDGER (Khatabook jaisa)
+   Har Labour ka apna khata. Rows teen jagah se apne-aap bante hain
+   (kuch alag se store nahi hota, isliye khata hamesha sahi rehta hai):
+     1) "due"  — AC Credited Payment ka Mate Share (50%) = Labour se lena baaki
+     2) "mile" — AC Credit / Report tab ke "Diya" column me bhari rakam (Labour ne aapko di)
+     3) manual — DATA.ledger me 🟢 Aapko Mile / 🔴 Aapne Diye (khata screen se)
+   Balance = due + Aapne Diye − Aapko Mile.   Plus = Aapko Milenge, Minus = Aap Denge.
+   Mate Share "Mila / Pending" ka nishan Demand ke COMMENT se aata hai:
+   Comment khaali = ⏳ Pending, kuch likha ho = ✅ Mila. Comment sirf 📊 Report tab me edit hota hai.
+================================================================ */
+const EMPTY_LEDGER = { rows: [], balance: 0, kulAaya: 0, kulMila: 0, kulDiye: 0 };
+
+function demandCommentStatus(d){
+  return (d && d.comment && String(d.comment).trim().length) ? "mila" : "pending";
+}
+
+// Saare Labour ka khata ek hi baar me (onlyLabourId do to sirf us Labour ka)
+function computeLedgers(onlyLabourId){
+  const acMap = {}, demMap = {};
+  DATA.acCredits.forEach(a => { acMap[a.date + "|" + a.labourId] = a; });
+  DATA.demands.forEach(d => { demMap[d.date + "|" + d.labourId] = d; });
+  const by = {};
+  const add = (lid, r) => { (by[lid] = by[lid] || []).push(r); };
+
+  DATA.payments.forEach(p => {
+    if(onlyLabourId && p.labourId !== onlyLabourId) return;
+    const ac = acMap[p.date + "|" + p.labourId];
+    if(!ac || ac.status !== "Credited") return;
+    const mate = (Number(p.amount) || 0) * 0.5;
+    if(mate <= 0) return;
+    const dueDate = ac.creditedDate || ac.date || p.date;
+    const dem = demMap[p.date + "|" + p.labourId];
+    add(p.labourId, { kind: "due", date: dueDate, amount: mate, order: 0,
+      comment: "Mate Share baaki — Demand " + fmtDate(p.date), status: demandCommentStatus(dem) });
+    const diya = Number(ac.diya) || 0;
+    if(diya > 0){
+      add(p.labourId, { kind: "mile", date: ac.diyaDate || dueDate, amount: diya, order: 1,
+        comment: "Diya — Demand " + fmtDate(p.date) });
+    }
+  });
+  toArray(DATA.ledger).forEach(e => {
+    if(onlyLabourId && e.labourId !== onlyLabourId) return;
+    add(e.labourId, { kind: e.type === "mile" ? "mile" : "diye", id: e.id, manual: true,
+      date: e.date || "", amount: Number(e.amount) || 0, comment: e.comment || "", order: 2 });
+  });
+
+  const out = {};
+  Object.keys(by).forEach(lid => {
+    const rows = by[lid].slice().sort((a, b) => String(a.date).localeCompare(String(b.date)) || a.order - b.order);
+    let bal = 0, kulAaya = 0, kulMila = 0, kulDiye = 0;
+    rows.forEach(r => {
+      if(r.kind === "mile"){ bal -= r.amount; kulMila += r.amount; }
+      else { bal += r.amount; if(r.kind === "due") kulAaya += r.amount; else kulDiye += r.amount; }
+      bal = Math.round(bal * 100) / 100;
+      r.balanceAfter = bal;
+    });
+    out[lid] = { rows, balance: bal, kulAaya, kulMila, kulDiye };
+  });
+  return out;
+}
+
+function getLabourLedger(labourId){ return computeLedgers(labourId)[labourId] || EMPTY_LEDGER; }
+function getLabourBalance(labourId){ return getLabourLedger(labourId).balance; }
+
+// Har Labour ke Credited Demand: kitne ka Comment bhara (Mila) aur kitne ka khaali (Pending)
+function computeMateStatusMap(){
+  const acMap = {};
+  DATA.acCredits.forEach(a => { acMap[a.date + "|" + a.labourId] = a; });
+  const out = {};
+  DATA.demands.forEach(d => {
+    const ac = acMap[d.date + "|" + d.labourId];
+    if(!ac || ac.status !== "Credited") return;
+    const o = out[d.labourId] = out[d.labourId] || { mila: 0, pending: 0 };
+    if(demandCommentStatus(d) === "mila") o.mila++; else o.pending++;
+  });
+  return out;
+}
+
+// Manual Khata entry (🟢 Aapko Mile / 🔴 Aapne Diye)
+function addManualLedgerEntry(labourId, type, amount, comment, date){
+  const amt = Number(amount) || 0;
+  if(!labourId || amt <= 0){ toast("Sahi Amount daalein", "error"); return false; }
+  DATA.ledger = toArray(DATA.ledger);
+  DATA.ledger.push({ id: makeId(), labourId, date: date || todayISO(), type: type === "mile" ? "mile" : "diye", amount: amt, comment: (comment || "").trim() });
+  persist();
+  return true;
+}
+
+/* ---------------------------------------------------------------
+   KHATA LIST + SUMMARY — Dashboard aur Past tab ka Payment Pending,
+   dono isi shared function se draw hote hain
+--------------------------------------------------------------- */
+function renderKhataSummaryInto(elId){
+  const box = $(elId);
+  if(!box) return;
+  const all = computeLedgers();
+  let milenge = 0, denge = 0, kulMila = 0, pendingLabour = 0;
+  Object.keys(all).forEach(lid => {
+    const b = all[lid].balance;
+    if(b > 0){ milenge += b; pendingLabour++; } else if(b < 0) denge += -b;
+    kulMila += all[lid].kulMila;
+  });
+  box.innerHTML = `
+    <div class="sum-card"><div class="v" style="color:#146c33">₹${milenge.toFixed(2)}</div><div class="l">Aapko Milenge (Mate Share Baaki)</div></div>
+    <div class="sum-card"><div class="v" style="color:#b05e0d">${pendingLabour}</div><div class="l">Labour jinka baaki hai</div></div>
+    <div class="sum-card"><div class="v">₹${kulMila.toFixed(2)}</div><div class="l">Ab tak Mila</div></div>
+    ${denge > 0 ? `<div class="sum-card"><div class="v" style="color:#c0392b">₹${denge.toFixed(2)}</div><div class="l">Aap Denge</div></div>` : ""}
+  `;
+}
+
+function renderKhataListInto(elId, term){
+  const box = $(elId);
+  if(!box) return;
+  term = (term || "").trim().toLowerCase();
+  const all = computeLedgers();
+  const msMap = computeMateStatusMap();
+  let list = DATA.labours.slice();
+  if(term){
+    list = list.filter(l => l.name.toLowerCase().includes(term) || String(l.jobcardNo || "").toLowerCase().includes(term));
+  }
+  list.sort((a, b) => ((all[b.id] || EMPTY_LEDGER).balance - (all[a.id] || EMPTY_LEDGER).balance) || a.name.localeCompare(b.name));
+  if(!list.length){ box.innerHTML = `<div class="empty">Koi Labour nahi mila.</div>`; return; }
+
+  box.innerHTML = list.map(l => {
+    const lg = all[l.id] || EMPTY_LEDGER;
+    const bal = lg.balance;
+    const cls = bal > 0 ? "credited" : (bal < 0 ? "pending" : "inactive");
+    const balTxt = "₹" + Math.abs(bal).toFixed(2);
+    const sub = bal === 0 ? "Balance Barabar" : (bal > 0 ? "Aapko Milenge" : "Aap Denge");
+    const ms = msMap[l.id] || { mila: 0, pending: 0 };
+    const msBadge = ms.pending > 0
+      ? `<span class="badge pending">⏳ ${ms.pending} Pending</span>`
+      : (ms.mila > 0 ? `<span class="badge credited">✅ Mila</span>` : "");
+    const last = lg.rows.length ? fmtDate(lg.rows[lg.rows.length - 1].date) : "Koi entry nahi";
+    return `
+      <div class="chk-item" style="cursor:pointer" onclick="openLedgerModal('${l.id}')">
+        <div class="lp-avatar">${escapeHtml((l.name || "?").trim().charAt(0).toUpperCase())}</div>
+        <div style="flex:1;min-width:0">
+          <div><b>${escapeHtml(l.name)}</b> ${msBadge}</div>
+          <div style="font-size:11.5px;color:var(--muted)">${escapeHtml(l.jobcardNo || "")} · ${last}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="badge ${cls}" style="font-size:13px">${balTxt}</div>
+          <div style="font-size:10.5px;color:var(--muted);margin-top:2px">${sub}</div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderDashboardKhata(){
+  renderKhataSummaryInto("dashKhataSummary");
+  renderKhataListInto("dashKhataList", $("dashKhataSearch") ? $("dashKhataSearch").value : "");
+}
+
+/* ---------------------------------------------------------------
+   LEDGER MODAL (Khatabook jaisa full screen khata) — Dashboard aur
+   Payment Pending, dono se yahi ek modal khulta hai
+--------------------------------------------------------------- */
+let currentLedgerLabourId = null;
+let ledgerEntryMode = null; // "mile" | "diye" | null (form band)
+
+function openLedgerModal(labourId){
+  currentLedgerLabourId = labourId;
+  ledgerEntryMode = null;
+  renderLedgerModal();
+  $("ledgerModalOverlay").classList.remove("hidden");
+}
+function closeLedgerModal(){
+  $("ledgerModalOverlay").classList.add("hidden");
+  currentLedgerLabourId = null;
+  ledgerEntryMode = null;
+  renderDashboardKhata();
+  renderPaymentPending();
+}
+function openLedgerEntryForm(type){
+  ledgerEntryMode = type;
+  renderLedgerModal();
+  setTimeout(() => { const el = $("ledgerEntryAmount"); if(el) el.focus(); }, 60);
+}
+function cancelLedgerEntryForm(){
+  ledgerEntryMode = null;
+  renderLedgerModal();
+}
+function saveLedgerEntry(){
+  if(!currentLedgerLabourId || !ledgerEntryMode) return;
+  const ok = addManualLedgerEntry(
+    currentLedgerLabourId, ledgerEntryMode,
+    $("ledgerEntryAmount").value, $("ledgerEntryNote").value, $("ledgerEntryDate").value
+  );
+  if(!ok) return;
+  ledgerEntryMode = null;
+  renderLedgerModal();
+  toast("Entry save ho gayi ✅");
+}
+function deleteLedgerEntry(id){
+  showConfirm("Ye Khata entry delete karni hai?", () => {
+    DATA.ledger = toArray(DATA.ledger).filter(e => e.id !== id);
+    persist();
+    renderLedgerModal();
+    toast("Entry delete ho gayi");
+  });
+}
+
+function renderLedgerModal(){
+  const l = DATA.labours.find(x => x.id === currentLedgerLabourId);
+  const body = $("ledgerModalBody");
+  if(!l || !body) return;
+  const lg = getLabourLedger(currentLedgerLabourId);
+  const bal = lg.balance;
+  const rows = lg.rows.slice().reverse(); // naya upar (screenshot jaisa)
+  const dueRows = lg.rows.filter(r => r.kind === "due");
+  const msMila = dueRows.filter(r => r.status === "mila").length;
+  const msPending = dueRows.length - msMila;
+  const balLabel = bal === 0 ? "Balance barabar 😊" : (bal > 0 ? "Aapko Milenge" : "Aap Denge");
+  const balColor = bal > 0 ? "#146c33" : (bal < 0 ? "#b05e0d" : "#555");
+
+  const formHtml = ledgerEntryMode ? `
+    <div class="lg-form ${ledgerEntryMode}">
+      <div class="lg-form-title">${ledgerEntryMode === "mile" ? escapeHtml(l.name) + " ne aapko diye" : "Aapne " + escapeHtml(l.name) + " ko diye"}</div>
+      <div class="row">
+        <div class="field grow"><label>Amount ₹</label><input type="number" id="ledgerEntryAmount" min="0" step="any" placeholder="0"></div>
+        <div class="field grow"><label>Date</label><input type="date" id="ledgerEntryDate" value="${todayISO()}"></div>
+      </div>
+      <div class="field"><label>Details (jaise: advance, mate share)</label><input type="text" id="ledgerEntryNote" placeholder="Details likhein..."></div>
+      <div class="row">
+        <button class="btn btn-sm ${ledgerEntryMode === "mile" ? "btn-green" : "btn-red"}" style="flex:1" onclick="saveLedgerEntry()">Save Karein</button>
+        <button class="btn btn-gray btn-sm" onclick="cancelLedgerEntryForm()">Cancel</button>
+      </div>
+    </div>` : "";
+
+  body.innerHTML = `
+    <h3 style="margin-bottom:8px">📒 ${escapeHtml(l.name)}</h3>
+    <div style="font-size:12px;color:var(--muted);margin:-6px 0 10px">${escapeHtml(l.jobcardNo || "")}</div>
+    <div class="lg-balcard">
+      <div><div style="font-size:12px;color:var(--muted)">${balLabel}</div><div class="lg-bal" style="color:${balColor}">₹${Math.abs(bal).toFixed(2)}</div></div>
+      <div style="font-size:11.5px;color:var(--muted);text-align:right;line-height:1.6">
+        Kul Mate Share: <b>₹${lg.kulAaya.toFixed(2)}</b><br>
+        Aapko Mile: <b style="color:#146c33">₹${lg.kulMila.toFixed(2)}</b><br>
+        Aapne Diye: <b style="color:#c0392b">₹${lg.kulDiye.toFixed(2)}</b>
+      </div>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin:8px 0">💬 Mate Share (Comment se): ✅ ${msMila} Mila &nbsp; ⏳ ${msPending} Pending — Comment sirf <b>📊 Report tab</b> me likhte hain.</p>
+    ${formHtml}
+    <div class="lg-cols"><span>ENTRIES</span><span>AAPNE DIYE</span><span>AAPKO MILE</span></div>
+    <div id="ledgerRows">
+      ${rows.length ? rows.map(r => `
+        <div class="lg-row">
+          <div class="lg-main">
+            <div class="lg-date">${fmtDate(r.date)} ${r.kind === "due" ? (r.status === "mila" ? '<span class="badge credited">✅ Mila</span>' : '<span class="badge pending">⏳ Pending</span>') : ""}</div>
+            <span class="lg-chip">Bal. ${r.balanceAfter < 0 ? "−" : ""}₹${Math.abs(r.balanceAfter).toFixed(2)}</span>
+            ${r.comment ? `<div class="lg-note">${escapeHtml(r.comment)}</div>` : ""}
+            ${r.manual ? `<button class="lg-del" onclick="deleteLedgerEntry('${r.id}')" title="Entry delete karein">🗑️</button>` : ""}
+          </div>
+          <div class="lg-amt diye">${r.kind === "due" || r.kind === "diye" ? "₹" + r.amount.toFixed(2) : ""}</div>
+          <div class="lg-amt mile">${r.kind === "mile" ? "₹" + r.amount.toFixed(2) : ""}</div>
+        </div>`).join("") : `<div class="empty">Abhi koi entry nahi — AC Credit hote hi Mate Share yahan chadh jayega.</div>`}
+    </div>
+    ${ledgerEntryMode ? "" : `
+    <div class="lg-footer">
+      <button class="lg-btn diye" onclick="openLedgerEntryForm('diye')">AAPNE DIYE ₹</button>
+      <button class="lg-btn mile" onclick="openLedgerEntryForm('mile')">AAPKO MILE ₹</button>
+    </div>`}
+  `;
+}
+$("ledgerModalOverlay").addEventListener("click", e => {
+  if(e.target.id === "ledgerModalOverlay") closeLedgerModal();
+});
+
+/* ---------------------------------------------------------------
+   KHATA BAAKI REPORT — sabka outstanding Mate Share ek PDF me
+--------------------------------------------------------------- */
+function getKhataBaakiRows(){
+  const all = computeLedgers();
+  const rows = [];
+  DATA.labours.forEach(l => {
+    const lg = all[l.id];
+    if(lg && Math.abs(lg.balance) >= 0.005) rows.push({ labour: l, lg });
+  });
+  rows.sort((a, b) => b.lg.balance - a.lg.balance);
+  return rows;
+}
+
+function khataPdfHtml(rows){
+  const cell = "border:1px solid #000;padding:4px;font-size:10.5px";
+  let total = 0;
+  rows.forEach(r => { total += r.lg.balance; });
+  return `
+    <div style="font-family:'Hind',Arial,sans-serif;color:#000;background:#fff;padding:8px;border:1px solid #000">
+      <h2 style="text-align:center;font-size:15px;margin:0 0 4px">📒 Mate Share — Baaki Report</h2>
+      <p style="text-align:center;font-size:10px;margin:0 0 8px">Labour Job Card System — ${fmtDate(todayISO())}</p>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr>
+          <th style="${cell};background:#f0f0f0">#</th><th style="${cell};background:#f0f0f0">Naam</th><th style="${cell};background:#f0f0f0">Jobcard</th>
+          <th style="${cell};background:#f0f0f0">Kul Mate Share ₹</th><th style="${cell};background:#f0f0f0">Mila ₹</th>
+          <th style="${cell};background:#f0f0f0">Aapne Diye ₹</th><th style="${cell};background:#f0f0f0">Baaki ₹</th>
+        </tr></thead>
+        <tbody>${rows.map((r, i) => `
+          <tr>
+            <td style="${cell};text-align:center">${i + 1}</td>
+            <td style="${cell}">${escapeHtml(r.labour.name)}</td>
+            <td style="${cell}">${escapeHtml(r.labour.jobcardNo || "")}</td>
+            <td style="${cell};text-align:right">${r.lg.kulAaya.toFixed(2)}</td>
+            <td style="${cell};text-align:right">${r.lg.kulMila.toFixed(2)}</td>
+            <td style="${cell};text-align:right">${r.lg.kulDiye.toFixed(2)}</td>
+            <td style="${cell};text-align:right;font-weight:700">${r.lg.balance < 0 ? "−" : ""}${Math.abs(r.lg.balance).toFixed(2)}</td>
+          </tr>`).join("")}</tbody>
+      </table>
+      <div style="background:#9c3b2e;color:#fff;text-align:center;padding:8px;border-radius:6px;margin-top:8px">
+        <div style="font-size:15px;font-weight:700">₹${total.toFixed(2)}</div>
+        <div style="font-size:10.5px">Kul Baaki — ${rows.length} Labour</div>
+      </div>
+      <p style="text-align:right;font-size:9.5px;color:#444;margin-top:8px;border-top:1px solid #999;padding-top:4px">Developed by Kurban Ali</p>
+    </div>`;
+}
+
+async function downloadKhataPDF(mode){
+  mode = mode || "download";
+  const rows = getKhataBaakiRows();
+  if(!rows.length){ toast("Abhi kisi Labour ka Khata baaki nahi hai", "error"); return; }
+  if(typeof window.jspdf === "undefined" || typeof html2canvas === "undefined"){
+    toast("PDF library load nahi hui — Internet check karke dobara try karein", "error"); return;
+  }
+  toast("PDF taiyar ho raha hai...", "info");
+  try{
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF("p", "mm", "a4");
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 4;
+    const PER_PAGE = 36;
+    const chunks = [];
+    for(let i = 0; i < rows.length; i += PER_PAGE) chunks.push(rows.slice(i, i + PER_PAGE));
+    const container = document.createElement("div");
+    container.style.cssText = "position:fixed;left:-10000px;top:0;width:700px;background:#fff";
+    document.body.appendChild(container);
+    try{
+      for(let p = 0; p < chunks.length; p++){
+        container.innerHTML = khataPdfHtml(chunks[p]);
+        await new Promise(r => setTimeout(r, 60));
+        const canvas = await html2canvas(container.firstElementChild, { scale: 2, backgroundColor: "#ffffff", logging: false });
+        if(!canvas || !canvas.width) throw new Error("blank canvas");
+        const imgWidth = pageWidth - margin * 2;
+        const imgHeight = Math.min((canvas.height * imgWidth) / canvas.width, pageHeight - margin * 2);
+        if(p > 0) pdf.addPage();
+        pdf.addImage(canvas.toDataURL("image/png", 1.0), "PNG", margin, margin, imgWidth, imgHeight);
+      }
+    } finally { document.body.removeChild(container); }
+    await finalizePdf(pdf, `Khata_Baaki_${todayISO()}.pdf`, mode);
+    if(mode !== "share") toast("PDF Download ho gaya");
+  }catch(err){
+    console.error("Khata PDF error:", err);
+    toast("PDF banane me dikkat hui, dobara try karein", "error");
+  }
+}
+function shareKhataPDF(){ downloadKhataPDF("share"); }
+
 
 /* ---------------------------------------------------------------
    TABS
@@ -529,7 +893,7 @@ setupSwipeNav();
 
 // Har tab ka data dobara render karo — manual "Refresh" button aur tab-switch dono isi se chalte hain
 function refreshTab(name){
-  if(name === "dashboard"){ renderDashboard(); renderLabourProfileList(); }
+  if(name === "dashboard"){ renderDashboard(); renderDashboardKhata(); renderLabourProfileList(); }
   if(name === "labour") renderLabours();
   if(name === "past"){
     if($("onePasteDate") && !$("onePasteDate").value) $("onePasteDate").value = todayISO();
@@ -589,6 +953,10 @@ function renderDashboard(){
     }
   });
 
+  let mateBaakiTotal = 0;
+  const ledgers = computeLedgers();
+  Object.keys(ledgers).forEach(lid => { if(ledgers[lid].balance > 0) mateBaakiTotal += ledgers[lid].balance; });
+
   const warnBox = $("dashboardWarning");
   if(warnBox){
     const lowCount = countLowBaakiJobcards();
@@ -605,6 +973,7 @@ function renderDashboard(){
     <div class="sum-card"><div class="v">₹${creditedAmount.toFixed(2)}</div><div class="l">AC Credited (₹)</div></div>
     <div class="sum-card"><div class="v">₹${pendingAmount.toFixed(2)}</div><div class="l">AC Pending (₹)</div></div>
     <div class="sum-card"><div class="v">₹${creditedMateShare.toFixed(2)}</div><div class="l">Mate Share (Credited)</div></div>
+    <div class="sum-card"><div class="v" style="color:#c0392b">₹${mateBaakiTotal.toFixed(2)}</div><div class="l">Mate Share Baaki (Khata)</div></div>
   `;
 }
 
@@ -1226,7 +1595,8 @@ function importDataJSON(event){
           demands: toArray(parsed.demands),
           payments: toArray(parsed.payments),
           acCredits: toArray(parsed.acCredits),
-          trash: toArray(parsed.trash)
+          trash: toArray(parsed.trash),
+          ledger: toArray(parsed.ledger)
         };
         persist();
         renderAll();
@@ -2006,11 +2376,11 @@ function saveLabour(){
 
   if(editingLabourId){
     const idx = DATA.labours.findIndex(l => l.id === editingLabourId);
-    if(idx > -1) DATA.labours[idx] = { id: editingLabourId, jobcardNo, name, aadhar, status };
+    if(idx > -1) DATA.labours[idx] = { ...DATA.labours[idx], id: editingLabourId, jobcardNo, name, aadhar, status };
     toast("Labour update ho gaya");
     cancelLabourEdit();
   } else {
-    DATA.labours.push({ id: makeId(), jobcardNo, name, aadhar, status });
+    DATA.labours.push({ id: makeId(), jobcardNo, name, aadhar, status, form10Priority: false });
     toast("Labour add ho gaya");
     $("labJobcard").value = "";
     $("labName").value = "";
@@ -2412,11 +2782,16 @@ function getPaymentPendingData(){
 }
 
 function renderPaymentPending(){
+  // Upar: Khata (Mate Share baaki) — Dashboard wali list isi shared function se banti hai
+  renderKhataSummaryInto("paymentKhataSummary");
+  renderKhataListInto("paymentKhataList", $("paymentKhataSearch") ? $("paymentKhataSearch").value : "");
+
+  // Neeche: Credited par Comment khaali wali entries (sirf dekhne ke liye — Comment Report tab me likhein)
   const box = $("paymentPendingList");
   if(!box) return;
   const { groups, bulkTotal, bulkCount } = getPaymentPendingData();
 
-  if(!groups.length){ box.innerHTML = `<div class="empty">Koi Pending nahi mila — Credited entries ke Comment bhare hue hain. 🎉</div>`; return; }
+  if(!groups.length){ box.innerHTML = `<div class="empty">Koi Credited entry aisi nahi jiska Comment khaali ho. 🎉</div>`; return; }
 
   let html = groups.map(g => `
     <div class="pp-block">
@@ -2424,10 +2799,7 @@ function renderPaymentPending(){
       ${g.items.map(i => `
         <div class="pp-item">
           <span>${fmtDate(i.date)} · ${i.kulDin} Din · ₹${i.amt.toFixed(2)}</span>
-          <div style="display:flex;gap:4px;align-items:center">
-            <input type="text" id="ppNote-${i.demandId}" placeholder="jaise: de diya" style="width:100px;padding:4px 6px;font-size:11px">
-            <button class="btn btn-blue btn-sm" style="padding:4px 8px" onclick="savePendingNote('${i.demandId}')">💾</button>
-          </div>
+          <span class="badge pending">⏳ Comment khaali</span>
         </div>
       `).join("")}
     </div>
@@ -2438,20 +2810,7 @@ function renderPaymentPending(){
 }
 
 // Payment Pending list se seedha comment likh kar Save karne ke liye
-function savePendingNote(demandId){
-  const input = $("ppNote-" + demandId);
-  if(!input) return;
-  const val = input.value.trim();
-  if(!val){ toast("Kuch likhein pehle", "error"); return; }
-  const d = DATA.demands.find(x => x.id === demandId);
-  if(!d) return;
-  d.comment = val;
-  persist();
-  toast("Save ho gaya");
-  renderPaymentPending();
-  renderDemandDates();
-  renderDemands();
-}
+
 
 // Payment Pending list ka Print-friendly HTML (PDF ke liye)
 function paymentPendingPdfHtml(groups, bulkTotal, bulkCount){
@@ -2548,12 +2907,7 @@ function renderDemands(){
         <td><span class="badge ${(l.status || "").toLowerCase()}">${l.status || "—"}</span></td>
         <td><span class="badge ${creditStatus === "Credited" ? "credited" : creditStatus === "Pending" ? "pending" : ""}">${creditStatus}</span></td>
         <td>${creditDate || "—"}</td>
-        <td>
-          <div style="display:flex;gap:4px;align-items:center">
-            <input type="text" class="rep-comment" id="cmt-${d.id}" value="${escapeHtml(d.comment || "")}" placeholder="..." style="width:90px">
-            <button class="btn btn-blue btn-sm" style="padding:5px 8px" onclick="saveComment('${d.id}')" title="Comment Save karein">💾</button>
-          </div>
-        </td>
+        <td>${d.comment && String(d.comment).trim() ? `<span class="badge active">${escapeHtml(d.comment)}</span>` : `<span class="badge pending">Khaali</span>`}</td>
         <td><button class="btn btn-red btn-sm" onclick="removeDemand('${d.id}')">Delete</button></td>
       </tr>
     `;
@@ -2574,12 +2928,7 @@ function updateDemandField(demandId, field, value){
 }
 
 // Har row ke comment ke saamne wala 💾 Save button — Demand List (Past tab)
-function saveComment(demandId){
-  const input = $("cmt-" + demandId);
-  if(!input) return;
-  updateDemandField(demandId, "comment", input.value);
-  toast("Comment save ho gaya", "success");
-}
+
 
 // Har row ke comment ke saamne wala 💾 Save button — Report tab
 function saveReportComment(demandId){
@@ -2678,9 +3027,14 @@ function renderACList(){
   let list = date ? DATA.payments.filter(p => p.date === date) : DATA.payments.slice();
   list = list.slice().sort((a, b) => b.date.localeCompare(a.date));
 
+  const labMap = {}, acMap = {}, demMap = {};
+  DATA.labours.forEach(l => { labMap[l.id] = l; });
+  DATA.acCredits.forEach(a => { acMap[a.date + "|" + a.labourId] = a; });
+  DATA.demands.forEach(d => { demMap[d.date + "|" + d.labourId] = d; });
+
   if(term){
     list = list.filter(p => {
-      const l = DATA.labours.find(x => x.id === p.labourId) || {};
+      const l = labMap[p.labourId] || {};
       return (l.name || "").toLowerCase().includes(term) || String(l.jobcardNo || "").toLowerCase().includes(term);
     });
   }
@@ -2688,10 +3042,13 @@ function renderACList(){
   $("acCount").textContent = "(" + list.length + " Entries)";
 
   $("acTableBody").innerHTML = list.map((p, i) => {
-    const l = DATA.labours.find(x => x.id === p.labourId) || {};
-    const ac = DATA.acCredits.find(a => a.date === p.date && a.labourId === p.labourId);
+    const l = labMap[p.labourId] || {};
+    const ac = acMap[p.date + "|" + p.labourId];
     const status = ac ? ac.status : "Pending";
+    const credited = status === "Credited";
     const creditedDate = ac ? (ac.creditedDate || ac.date) : "";
+    const mate = (Number(p.amount) || 0) * 0.5;
+    const mStatus = credited ? demandCommentStatus(demMap[p.date + "|" + p.labourId]) : null;
     return `
       <tr>
         <td><input type="checkbox" class="ac-row-chk" value="${p.id}"></td>
@@ -2700,14 +3057,21 @@ function renderACList(){
         <td>${escapeHtml(l.jobcardNo || "—")}</td>
         <td>${escapeHtml(l.name || "—")}</td>
         <td>₹${p.amount}</td>
+        <td>₹${mate.toFixed(2)}</td>
+        <td>${credited
+          ? `<input type="number" class="att-in" style="width:84px" min="0" step="any" value="${ac && ac.diya ? ac.diya : ""}" placeholder="0" onchange="updateACDiya('${p.id}', this.value)">`
+          : `<span style="color:var(--muted);font-size:12px">—</span>`}</td>
+        <td>${credited
+          ? (mStatus === "mila" ? `<span class="badge credited">✅ Mila</span>` : `<span class="badge pending">⏳ Pending</span>`)
+          : `<span style="color:var(--muted);font-size:12px">—</span>`}</td>
         <td>
           <span class="badge ${status.toLowerCase()}">${status}</span>
-          ${status === "Credited" ? `<div class="mt" style="display:flex;align-items:center;gap:4px">
+          ${credited ? `<div class="mt" style="display:flex;align-items:center;gap:4px">
             <input type="date" class="ac-date-edit" value="${creditedDate}" style="width:132px;font-size:11.5px;padding:4px 5px" onchange="updateACCreditedDate('${p.id}', this.value)">
           </div>` : ""}
         </td>
         <td>
-          ${status === "Credited"
+          ${credited
             ? `<button class="btn btn-orange btn-sm" onclick="undoACCredit('${p.id}')">Undo</button>`
             : `<button class="btn btn-green btn-sm" onclick="creditAC('${p.id}')">Credit</button>`}
         </td>
@@ -2730,13 +3094,53 @@ function toggleACSelectAll(){
 
 // Credit karte waqt "Credited Date" field se date liya jata hai (agar khaali hai to aaj ki date) —
 // yeh Demand Date se alag hoti hai, kyunki paisa aksar Demand ke kai din baad Account me credit hota hai
+// Credit karte waqt "Credited Date" field se date liya jata hai (agar khaali hai to aaj ki date) —
+// yeh Demand Date se alag hoti hai, kyunki paisa aksar Demand ke kai din baad Account me credit hota hai.
+// Pehle se bhari hui Diya (agar ho) bani rehti hai.
 function creditACRecord(paymentId){
   const p = DATA.payments.find(x => x.id === paymentId);
   if(!p) return;
   const chosenDate = ($("acCreditDate") && $("acCreditDate").value) || todayISO();
   const idx = DATA.acCredits.findIndex(a => a.date === p.date && a.labourId === p.labourId);
-  const record = { id: idx > -1 ? DATA.acCredits[idx].id : makeId(), date: p.date, labourId: p.labourId, status: "Credited", creditedDate: chosenDate };
+  const prev = idx > -1 ? DATA.acCredits[idx] : {};
+  const record = { ...prev, id: prev.id || makeId(), date: p.date, labourId: p.labourId, status: "Credited", creditedDate: chosenDate };
   if(idx > -1) DATA.acCredits[idx] = record; else DATA.acCredits.push(record);
+}
+
+// "Diya" — Labour ne Mate Share me se kitna aapko diya (AC Credit aur Report dono tab yahi function use karte hain).
+// Khaali ya 0 = abhi nahi mila. Amount Khata me "Aapko Mile" ban kar chadh jata hai.
+function updateACDiya(paymentId, value){
+  const p = DATA.payments.find(x => x.id === paymentId);
+  if(!p) return;
+  const idx = DATA.acCredits.findIndex(a => a.date === p.date && a.labourId === p.labourId);
+  if(idx === -1 || DATA.acCredits[idx].status !== "Credited"){
+    toast("Pehle AC Credit karein, phir Diya bharein", "error");
+    refreshPaymentViews();
+    return;
+  }
+  const mate = (Number(p.amount) || 0) * 0.5;
+  const amt = (value === "" || value === null) ? 0 : parseFloat(value);
+  if(isNaN(amt) || amt < 0){ toast("Sahi Amount daalein", "error"); refreshPaymentViews(); return; }
+  if(amt > mate + 0.009){
+    toast("Diya Mate Share (₹" + mate.toFixed(2) + ") se zyada nahi ho sakta", "error");
+    refreshPaymentViews();
+    return;
+  }
+  const ac = DATA.acCredits[idx];
+  if(amt === (Number(ac.diya) || 0)) return;
+  ac.diya = amt;
+  ac.diyaDate = amt > 0 ? todayISO() : "";
+  persist();
+  refreshPaymentViews();
+  toast(amt > 0 ? "Diya save ho gaya — Khata me chadh gaya" : "Diya 0 kar diya");
+}
+
+function refreshPaymentViews(){
+  renderACList();
+  generateReport();
+  renderDashboard();
+  renderDashboardKhata();
+  renderPaymentPending();
 }
 
 function creditAC(paymentId){
@@ -2795,31 +3199,60 @@ function bulkUndoACCredit(){
 /* ================================================================
    TAB 5: REPORT
 ================================================================ */
-function generateReport(){
+// Report ki rows — screen, Print aur PDF teeno isi ek function se banti hain (filter/sort ek jaisa lage)
+function getReportRows(){
   const date = $("reportDate") ? $("reportDate").value : "";
   const onlyCredited = $("reportOnlyCredited") ? $("reportOnlyCredited").checked : false;
+  const onlyPending = $("reportOnlyPending") ? $("reportOnlyPending").checked : false;
+  const sortBaaki = $("reportSortBaaki") ? $("reportSortBaaki").checked : false;
 
   DATA.demands = toArray(DATA.demands);
   DATA.labours = toArray(DATA.labours);
   DATA.payments = toArray(DATA.payments);
   DATA.acCredits = toArray(DATA.acCredits);
 
+  const labMap = {}, payMap = {}, acMap = {};
+  DATA.labours.forEach(l => { labMap[l.id] = l; });
+  DATA.payments.forEach(p => { payMap[p.date + "|" + p.labourId] = p; });
+  DATA.acCredits.forEach(a => { acMap[a.date + "|" + a.labourId] = a; });
+
   let demandList = date ? DATA.demands.filter(d => d.date === date) : DATA.demands.slice();
   demandList.sort((a, b) => b.date.localeCompare(a.date));
 
-  if(onlyCredited){
-    demandList = demandList.filter(d => {
-      const ac = DATA.acCredits.find(x => x.date === d.date && x.labourId === d.labourId);
-      return !!(ac && ac.status === "Credited");
-    });
-  }
+  let rows = demandList.map(d => {
+    const l = labMap[d.labourId] || {};
+    const p = payMap[d.date + "|" + d.labourId];
+    const ac = acMap[d.date + "|" + d.labourId];
+    const acStatus = ac ? ac.status : (p ? "Pending" : "—");
+    const credited = acStatus === "Credited";
+    const amount = p ? (Number(p.amount) || 0) : 0;
+    const mate = amount * 0.5;
+    const diya = ac ? (Number(ac.diya) || 0) : 0;
+    return {
+      d, l, p, ac, acStatus, credited, amount, mate, diya,
+      baaki: credited ? Math.max(0, mate - diya) : 0,
+      mateStatus: credited ? demandCommentStatus(d) : null,
+      creditDate: ac ? fmtDate(ac.creditedDate || ac.date) : ""
+    };
+  });
+
+  if(onlyCredited) rows = rows.filter(r => r.credited);
+  // "Sirf Pending" = Credited ho chuka par Comment abhi khaali (Mate Share Pending)
+  if(onlyPending) rows = rows.filter(r => r.mateStatus === "pending");
+  if(sortBaaki) rows.sort((a, b) => b.baaki - a.baaki || b.d.date.localeCompare(a.d.date));
+  return rows;
+}
+
+function generateReport(){
+  const date = $("reportDate") ? $("reportDate").value : "";
+  const rows = getReportRows();
 
   const emptyBox = $("reportEmpty");
   const titleBox = $("reportTitle");
   const summaryBox = $("reportSummary");
   const bodyBox = $("reportTableBody");
 
-  if(!demandList.length){
+  if(!rows.length){
     if(bodyBox) bodyBox.innerHTML = "";
     if(summaryBox) summaryBox.innerHTML = "";
     if(titleBox) titleBox.textContent = "📊 Report";
@@ -2829,47 +3262,47 @@ function generateReport(){
   if(emptyBox) emptyBox.classList.add("hidden");
   if(titleBox) titleBox.textContent = date ? `📊 Report — ${fmtDate(date)}` : "📊 Report — Sabhi Dates";
 
-  let totalPayment = 0, totalMate = 0, totalLabour = 0, creditedCount = 0;
-  const rowsHtml = [];
-
-  demandList.forEach((d, i) => {
-    const l = DATA.labours.find(x => x.id === d.labourId) || {};
-    const p = DATA.payments.find(x => x.date === d.date && x.labourId === d.labourId);
-    const ac = DATA.acCredits.find(x => x.date === d.date && x.labourId === d.labourId);
-    const acStatus = ac ? ac.status : (p ? "Pending" : "—");
-
-    if(p){ totalPayment += Number(p.amount) || 0; totalMate += (Number(p.amount) || 0) * 0.5; totalLabour += (Number(p.amount) || 0) * 0.5; }
-    if(acStatus === "Credited") creditedCount++;
-
-    const creditDate = ac ? fmtDate(ac.creditedDate || ac.date) : "";
-    rowsHtml.push(`
+  let totalPayment = 0, totalMate = 0, totalLabour = 0, creditedCount = 0, totalDiya = 0, totalBaaki = 0;
+  const rowsHtml = rows.map((r, i) => {
+    if(r.p){ totalPayment += r.amount; totalMate += r.mate; totalLabour += r.amount * 0.5; }
+    if(r.credited){ creditedCount++; totalDiya += r.diya; totalBaaki += r.baaki; }
+    const d = r.d, l = r.l, p = r.p;
+    return `
       <tr>
-        <td>${i + 1}</td>
+        <td class="nw">${i + 1}</td>
         <td>${escapeHtml(l.name || "—")}</td>
         <td>${escapeHtml(l.jobcardNo || "—")}</td>
-        <td>${d.kulDin ?? ""}</td>
-        <td>${d.pratidin ?? ""}</td>
-        <td>${p ? "₹" + p.amount : "—"}</td>
-        <td><span class="badge ${acStatus === "Credited" ? "credited" : acStatus === "Pending" ? "pending" : ""}">${acStatus}</span></td>
-        <td>${creditDate || "—"}</td>
-        <td>
+        <td class="nw">${d.kulDin ?? ""}</td>
+        <td class="nw">${d.pratidin ?? ""}</td>
+        <td class="nw">${p ? "₹" + p.amount : "—"}</td>
+        <td class="nw">${p ? "₹" + r.mate.toFixed(2) : "—"}</td>
+        <td class="nw">${r.credited && p
+          ? `<input type="number" class="att-in" style="width:78px" min="0" step="any" value="${r.diya || ""}" placeholder="0" onchange="updateACDiya('${p.id}', this.value)">`
+          : "—"}</td>
+        <td class="nw" style="font-weight:700;color:${r.baaki > 0 ? "#c0392b" : "#146c33"}">${r.credited ? (r.baaki > 0 ? "₹" + r.baaki.toFixed(2) : "✅") : "—"}</td>
+        <td class="nw">${r.mateStatus === "mila" ? `<span class="badge credited">✅ Mila</span>` : (r.mateStatus === "pending" ? `<span class="badge pending">⏳ Pending</span>` : "—")}</td>
+        <td class="nw"><span class="badge ${r.acStatus === "Credited" ? "credited" : r.acStatus === "Pending" ? "pending" : ""}">${r.acStatus}</span></td>
+        <td class="nw">${r.creditDate || "—"}</td>
+        <td class="c-comment">
           <div style="display:flex;gap:4px;align-items:center">
             <input type="text" class="rep-comment" id="rcmt-${d.id}" value="${escapeHtml(d.comment || "")}" placeholder="...">
             <button class="btn btn-blue btn-sm" style="padding:5px 8px" onclick="saveReportComment('${d.id}')" title="Comment Save karein">💾</button>
           </div>
         </td>
       </tr>
-    `);
+    `;
   });
 
   if(bodyBox) bodyBox.innerHTML = rowsHtml.join("");
   if(summaryBox){
     summaryBox.innerHTML = `
-      <div class="sum-card"><div class="v">${demandList.length}</div><div class="l">Total Records</div></div>
+      <div class="sum-card"><div class="v">${rows.length}</div><div class="l">Total Records</div></div>
       <div class="sum-card"><div class="v">₹${totalPayment.toFixed(2)}</div><div class="l">Total Payment</div></div>
       <div class="sum-card"><div class="v">₹${totalMate.toFixed(2)}</div><div class="l">Mate Share</div></div>
       <div class="sum-card"><div class="v">₹${totalLabour.toFixed(2)}</div><div class="l">Labour Share</div></div>
-      <div class="sum-card"><div class="v">${creditedCount}/${demandList.length}</div><div class="l">AC Credited</div></div>
+      <div class="sum-card"><div class="v">${creditedCount}/${rows.length}</div><div class="l">AC Credited</div></div>
+      <div class="sum-card"><div class="v" style="color:#146c33">₹${totalDiya.toFixed(2)}</div><div class="l">Diya (Mila)</div></div>
+      <div class="sum-card"><div class="v" style="color:#c0392b">₹${totalBaaki.toFixed(2)}</div><div class="l">Mate Baaki</div></div>
     `;
   }
 }
@@ -2891,67 +3324,60 @@ function printReport(){
    (CSV ki jagah seedha PDF download hota hai)
 ================================================================ */
 function getReportRowsData(){
-  const date = $("reportDate") ? $("reportDate").value : "";
-  const onlyCredited = $("reportOnlyCredited") ? $("reportOnlyCredited").checked : false;
-
-  let demandList = date ? DATA.demands.filter(d => d.date === date) : DATA.demands.slice();
-  if(onlyCredited){
-    demandList = demandList.filter(d => {
-      const ac = DATA.acCredits.find(x => x.date === d.date && x.labourId === d.labourId);
-      return !!(ac && ac.status === "Credited");
-    });
-  }
-
-  return demandList.map(d => {
-    const l = DATA.labours.find(x => x.id === d.labourId) || {};
-    const p = DATA.payments.find(x => x.date === d.date && x.labourId === d.labourId);
-    const ac = DATA.acCredits.find(x => x.date === d.date && x.labourId === d.labourId);
-    const acStatus = ac ? ac.status : (p ? "Pending" : "—");
-    const creditDate = ac ? fmtDate(ac.creditedDate || ac.date) : "";
-    return {
-      name: l.name || "—",
-      jobcardNo: l.jobcardNo || "—",
-      kulDin: d.kulDin ?? "",
-      pratidin: d.pratidin ?? "",
-      amount: p ? "₹" + p.amount : "—",
-      status: acStatus,
-      credit: creditDate || "—",
-      // Comment khaali hai to yahan bilkul khaali string hi jaayegi —
-      // koi placeholder/"comment" word print nahi hoga
-      comment: d.comment ? String(d.comment).trim() : ""
-    };
-  });
+  return getReportRows().map(r => ({
+    name: r.l.name || "—",
+    jobcardNo: r.l.jobcardNo || "—",
+    kulDin: r.d.kulDin ?? "",
+    pratidin: r.d.pratidin ?? "",
+    amount: r.p ? "₹" + r.p.amount : "—",
+    mate: r.p ? r.mate.toFixed(2) : "—",
+    diya: r.credited ? (r.diya ? r.diya.toFixed(2) : "0") : "—",
+    baaki: r.credited ? (r.baaki > 0 ? r.baaki.toFixed(2) : "0") : "—",
+    status: r.acStatus,
+    credit: r.creditDate || "—",
+    // Comment khaali hai to yahan bilkul khaali string hi jaayegi —
+    // koi placeholder/"comment" word print nahi hoga
+    comment: r.d.comment ? String(r.d.comment).trim() : ""
+  }));
 }
 
 function reportPrintDocHtml(pageRows, dateLabel, pageNum, totalPages, startIndex){
   const nw = "white-space:nowrap;width:1%"; // content jitni hi chaudi, wrap nahi
+  const cell = "border:1px solid #000;padding:4px";
   const rows = pageRows.map((r, i) => `
     <tr>
-      <td style="border:1px solid #000;padding:5px;text-align:center;${nw}">${startIndex + i + 1}</td>
-      <td style="border:1px solid #000;padding:5px">${escapeHtml(r.name)}</td>
-      <td style="border:1px solid #000;padding:5px;${nw}">${escapeHtml(r.jobcardNo)}</td>
-      <td style="border:1px solid #000;padding:5px;text-align:center;${nw}">${escapeHtml(String(r.kulDin))}</td>
-      <td style="border:1px solid #000;padding:5px;text-align:center;${nw}">${escapeHtml(String(r.pratidin))}</td>
-      <td style="border:1px solid #000;padding:5px;text-align:center;${nw}">${escapeHtml(r.amount)}</td>
-      <td style="border:1px solid #000;padding:5px;text-align:center;${nw}">${escapeHtml(r.status)}</td>
-      <td style="border:1px solid #000;padding:5px;text-align:center;${nw}">${escapeHtml(r.credit)}</td>
-      <td style="border:1px solid #000;padding:5px">${escapeHtml(r.comment)}</td>
+      <td style="${cell};text-align:center;${nw}">${startIndex + i + 1}</td>
+      <td style="${cell}">${escapeHtml(r.name)}</td>
+      <td style="${cell};${nw}">${escapeHtml(r.jobcardNo)}</td>
+      <td style="${cell};text-align:center;${nw}">${escapeHtml(String(r.kulDin))}</td>
+      <td style="${cell};text-align:center;${nw}">${escapeHtml(String(r.pratidin))}</td>
+      <td style="${cell};text-align:center;${nw}">${escapeHtml(r.amount)}</td>
+      <td style="${cell};text-align:center;${nw}">${escapeHtml(r.mate)}</td>
+      <td style="${cell};text-align:center;${nw}">${escapeHtml(r.diya)}</td>
+      <td style="${cell};text-align:center;font-weight:700;${nw}">${escapeHtml(r.baaki)}</td>
+      <td style="${cell};text-align:center;${nw}">${escapeHtml(r.status)}</td>
+      <td style="${cell};text-align:center;${nw}">${escapeHtml(r.credit)}</td>
+      <td style="${cell}">${escapeHtml(r.comment)}</td>
     </tr>`).join("");
+  const th = `border:1px solid #000;padding:4px;background:#f0f0f0`;
   return `
     <div style="font-family:'Hind',Arial,sans-serif;color:#000;background:#fff;padding:6px;border:1px solid #000">
       <h2 style="text-align:center;font-size:16px;margin:0">📊 Report${dateLabel ? " — " + dateLabel : " — Sabhi Dates"}</h2>
       <p style="text-align:center;font-size:10.5px;margin:4px 0 10px">Labour Job Card System — ${fmtDate(todayISO())}${totalPages > 1 ? ` — Page ${pageNum}/${totalPages}` : ""}</p>
-      <table style="width:100%;border-collapse:collapse;font-size:10.5px">
+      <table style="width:100%;border-collapse:collapse;font-size:9.5px">
         <thead><tr>
-          <th style="border:1px solid #000;padding:5px;background:#f0f0f0;${nw}">#</th>
-          <th style="border:1px solid #000;padding:5px;background:#f0f0f0">Name</th>
-          <th style="border:1px solid #000;padding:5px;background:#f0f0f0;${nw}">Jobcard No.</th>
-          <th style="border:1px solid #000;padding:5px;background:#f0f0f0;${nw}">Kul Divas</th>
-          <th style="border:1px solid #000;padding:5px;background:#f0f0f0;${nw}">Pratidin ₹</th>
-          <th style="border:1px solid #000;padding:5px;background:#f0f0f0;${nw}">Kul Bhugtan ₹</th>
-          <th style="border:1px solid #000;padding:5px;background:#f0f0f0;${nw}">Status</th>
-          <th style="border:1px solid #000;padding:5px;background:#f0f0f0;${nw}">Credit</th>
-          <th style="border:1px solid #000;padding:5px;background:#f0f0f0">Comment</th>
+          <th style="${th};${nw}">#</th>
+          <th style="${th}">Name</th>
+          <th style="${th};${nw}">Jobcard No.</th>
+          <th style="${th};${nw}">Din</th>
+          <th style="${th};${nw}">Dar ₹</th>
+          <th style="${th};${nw}">Kul ₹</th>
+          <th style="${th};${nw}">Mate ₹</th>
+          <th style="${th};${nw}">Diya ₹</th>
+          <th style="${th};${nw}">Baaki ₹</th>
+          <th style="${th};${nw}">Status</th>
+          <th style="${th};${nw}">Credit</th>
+          <th style="${th}">Comment</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -3013,6 +3439,81 @@ let nregaShowAll = false;  // Naya variable
 let nregaFilterMode = null;  // "gt" (isse zyada) ya "lt" (isse kam)
 let nregaFilterVal = null;
 
+/* ---------------------------------------------------------------
+   FORM 10 — AUTO / MANUAL mode + ⭐ Priority
+   Ek Jobcard par 2 naam (pati-patni) ho to Jobcard ke BAAKI din dekh kar
+   app khud decide karta hai: 1 naam aaye ya 2.
+     baaki 0 ya kam  -> din khatam
+     10 se kam       -> 1 naam (⚠️ jaldi khatam)
+     10 se 16        -> sirf 1 naam
+     16 se zyada     -> 2 naam
+   Jab sirf 1 naam chahiye to ⭐ Priority wala naam (aksar patni) chuna jata hai.
+   Manual mode me app kuch decide nahi karta, aap khud chunte ho.
+--------------------------------------------------------------- */
+let nregaAutoMode = true;
+
+function getJobcardNameSuggestion(baaki){
+  if(baaki <= 0) return null;
+  if(baaki < 10) return "warn";
+  if(baaki <= JOBCARD_LOW_WARNING) return "one";
+  return "two";
+}
+
+function getActiveJobcardMembers(jobcardNo){
+  return DATA.labours.filter(x => x.jobcardNo === jobcardNo && x.status === "Active");
+}
+
+function autoSyncJobcardSelection(labourId, wantSelected){
+  const l = DATA.labours.find(x => x.id === labourId);
+  if(!l) return;
+  const members = getActiveJobcardMembers(l.jobcardNo);
+  if(members.length < 2){
+    if(wantSelected) nregaSelected.add(labourId); else nregaSelected.delete(labourId);
+    return;
+  }
+  if(!wantSelected){ members.forEach(m => nregaSelected.delete(m.id)); return; }
+
+  const sugg = getJobcardNameSuggestion(getJobcardBaaki(l.jobcardNo));
+  if(sugg === "two"){ members.forEach(m => nregaSelected.add(m.id)); return; }
+
+  // 1 naam: ⭐ Priority wala, nahi to jise aapne dabaya
+  const keep = members.find(m => m.form10Priority) || l;
+  members.forEach(m => { if(m.id === keep.id) nregaSelected.add(m.id); else nregaSelected.delete(m.id); });
+  if(!sugg) toast("Is Jobcard me ek bhi din baaki nahi hai", "info");
+}
+
+function setNregaMode(mode){
+  nregaAutoMode = (mode === "auto");
+  const a = $("btnNregaAuto"), m = $("btnNregaManual");
+  if(a) a.className = "btn btn-sm " + (nregaAutoMode ? "btn-green" : "btn-outline");
+  if(m) m.className = "btn btn-sm " + (!nregaAutoMode ? "btn-green" : "btn-outline");
+  if(nregaAutoMode){
+    const seen = new Set();
+    Array.from(nregaSelected).forEach(id => {
+      const l = DATA.labours.find(x => x.id === id);
+      if(!l || seen.has(l.jobcardNo)) return;
+      seen.add(l.jobcardNo);
+      autoSyncJobcardSelection(id, true);
+    });
+  }
+  renderNregaSearch();
+}
+
+function toggleForm10Priority(id){
+  const l = DATA.labours.find(x => x.id === id);
+  if(!l) return;
+  const willSet = !l.form10Priority;
+  // Ek Jobcard par ek hi ⭐
+  DATA.labours.forEach(x => { if(x.jobcardNo === l.jobcardNo) x.form10Priority = false; });
+  l.form10Priority = willSet;
+  persist();
+  if(nregaAutoMode){
+    const sel = getActiveJobcardMembers(l.jobcardNo).find(m => nregaSelected.has(m.id));
+    if(sel) autoSyncJobcardSelection(sel.id, true);
+  }
+  renderNregaSearch();
+}
+
 function renderNregaSearch(){
   const term = ($("nregaSearch").value || "").trim().toLowerCase();
   const box = $("nregaSearchList");
@@ -3044,14 +3545,24 @@ function renderNregaSearch(){
     const hue = getLabourDinHue(l.id);
     const baaki = getJobcardBaaki(l.jobcardNo);
     const low = baaki < JOBCARD_LOW_WARNING;
-    const jcMembers = DATA.labours.filter(x => x.jobcardNo === l.jobcardNo && x.status === "Active");
+    const jcMembers = getActiveJobcardMembers(l.jobcardNo);
     const isDual = jcMembers.length > 1;
     const isSel = nregaSelected.has(l.id);
+    const sugg = getJobcardNameSuggestion(baaki);
     const partnerSelected = isDual && !isSel && jcMembers.some(m => m.id !== l.id && nregaSelected.has(m.id));
+    let suggBadge = "";
+    if(isDual){
+      if(sugg === "two") suggBadge = ' <span class="badge active">2 naam</span>';
+      else if(sugg === "one") suggBadge = ' <span class="badge pending">1 naam</span>';
+      else if(sugg === "warn") suggBadge = ' <span class="badge pending">1 naam ⚠️ kam din</span>';
+      else suggBadge = ' <span class="badge inactive">din khatam</span>';
+    }
+    const partnerChip = (partnerSelected && !nregaAutoMode) ? ' <span class="badge" style="background:#ffe4b3;color:#8a5300">Jodidaar select, ye baaki</span>' : "";
     return `
     <div class="chk-item">
       <input type="checkbox" class="nrega-chk" value="${l.id}" ${isSel ? "checked" : ""} onchange="toggleNregaSelect('${l.id}', this.checked)">
-      <div style="flex:1">${escapeHtml(l.name)} <span style="font-size:12px;color:var(--muted)">(Jobcard: ${escapeHtml(l.jobcardNo)})</span>${low ? ' <span class="badge" style="background:#ffe4b3;color:#8a5300">⚠️ Kam Din</span>' : ""}${partnerSelected ? ' <span class="badge" style="background:#ffe4b3;color:#8a5300">Jodidaar select, ye baaki</span>' : ""}</div>
+      <div style="flex:1">${escapeHtml(l.name)} <span style="font-size:12px;color:var(--muted)">(Jobcard: ${escapeHtml(l.jobcardNo)})</span>${low ? ' <span class="badge" style="background:#ffe4b3;color:#8a5300">⚠️ Kam Din</span>' : ""}${suggBadge}${partnerChip}</div>
+      ${isDual ? `<button class="star-btn ${l.form10Priority ? "active" : ""}" onclick="toggleForm10Priority('${l.id}')" title="Priority: sirf 1 naam chahiye to ye pehle aayega">★</button>` : ""}
       <div style="font-size:11px;color:var(--muted);text-align:right;line-height:1.5">Hue: <b style="color:var(--green-dark)">${hue}</b><br>Baaki: <b style="color:${low ? "#c0392b" : "#b05e0d"}">${baaki}</b></div>
     </div>
   `;
@@ -3081,6 +3592,11 @@ function clearNregaFilter(){
 }
 
 function toggleNregaSelect(id, checked){
+  if(nregaAutoMode){
+    autoSyncJobcardSelection(id, checked);
+    renderNregaSearch();
+    return;
+  }
   if(checked) nregaSelected.add(id); else nregaSelected.delete(id);
   updateNregaSelectedCount();
   buildNregaFormTable(); // live preview
@@ -3092,8 +3608,16 @@ function toggleNregaSelectAll(){
     chk.checked = checked;
     if(checked) nregaSelected.add(chk.value); else nregaSelected.delete(chk.value);
   });
-  updateNregaSelectedCount();
-  buildNregaFormTable(); // live preview
+  if(nregaAutoMode && checked){
+    const seen = new Set();
+    Array.from(nregaSelected).forEach(id => {
+      const l = DATA.labours.find(x => x.id === id);
+      if(!l || seen.has(l.jobcardNo)) return;
+      seen.add(l.jobcardNo);
+      autoSyncJobcardSelection(id, true);
+    });
+  }
+  renderNregaSearch();
 }
 
 function clearNregaSelection(){
@@ -3136,7 +3660,8 @@ function buildNregaFormTable(){
   const inSeries = [], outside = [];
   selectedActive.forEach(l => {
     const members = jcActiveMembers[l.jobcardNo] || [l.id];
-    const allMembersSelected = members.every(id => nregaSelected.has(id));
+    const oneNameOk = nregaAutoMode && getJobcardNameSuggestion(getJobcardBaaki(l.jobcardNo)) !== "two" && members.some(id => nregaSelected.has(id));
+    const allMembersSelected = members.every(id => nregaSelected.has(id)) || oneNameOk;
     if(allMembersSelected) inSeries.push(l); else outside.push(l);
   });
   inSeries.sort((a, b) => String(a.jobcardNo).localeCompare(String(b.jobcardNo)));
