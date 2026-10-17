@@ -187,6 +187,9 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
 .dd-count{background:var(--green-light);color:var(--green-dark);border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700}
 .dd-detail{display:none;padding:6px 12px 10px;background:var(--green-light);border-radius:0 0 8px 8px;margin:-6px 0 8px}
 .dd-detail.open{display:block}
+.dd-date-row.sel{border-color:var(--green);background:var(--green-light);box-shadow:0 0 0 2px var(--green) inset;font-weight:700}
+.dd-dot{width:12px;height:12px;border-radius:50%;display:inline-block;flex:none;background:#b8bdb9}
+.dd-dot.all{background:#1f9d55}.dd-dot.part{background:#f08a24}
 .dd-item{display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-bottom:1px dashed var(--border)}
 .dd-item:last-child{border-bottom:none}
 .pp-block{border:1.5px solid var(--orange, #e07b1a);border-radius:8px;margin-bottom:10px;overflow:hidden}
@@ -517,36 +520,6 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
         </div>
       </div>
 
-      <div class="card">
-        <h3>📅 Demand Dates</h3>
-        <button class="btn btn-outline btn-sm acc-btn" data-show="📅 Demand Dates Dikhayein" data-hide="🙈 Demand Dates Chhupayein" onclick="toggleAcc('demandDatesBox', this)">📅 Demand Dates Dikhayein</button>
-        <div class="collapsible acc-item" id="demandDatesBox">
-          <p style="font-size:12px;color:var(--muted);margin:8px 0">Kisi bhi Date pe click karein — us din kiski Demand thi, Din, Payment aur Comment sab khul jaayega.</p>
-          <div id="demandDatesList" class="mt"></div>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>🗂️ Demand List (Past) <span id="demandCount" style="font-size:12.5px;color:var(--muted);font-weight:400"></span></h3>
-        <button class="btn btn-outline btn-sm acc-btn" data-show="🗂️ Demand List Dikhayein" data-hide="🙈 Demand List Chhupayein" onclick="toggleAcc('demandListBox', this)">🗂️ Demand List Dikhayein</button>
-        <div class="collapsible acc-item" id="demandListBox">
-        <div class="row mt">
-          <input type="text" id="demandListSearch" class="grow" placeholder="🔍 Search by Name / Jobcard" oninput="renderDemands()">
-          <div class="field grow"><label>Filter by Date</label><input type="date" id="demandFilterDate" onchange="renderDemands()"></div>
-          <button class="btn btn-gray btn-sm" onclick="clearDemandFilter()">Clear Filter</button>
-          <button class="btn btn-red btn-sm" onclick="bulkDeleteDemands()">🗑️ Bulk Delete Selected</button>
-          <button class="btn btn-gray btn-sm" onclick="manualRefresh('past')">🔄 Refresh</button>
-        </div>
-        <p style="font-size:12px;color:var(--muted);margin-top:8px">ℹ️ <b>Credit Status / Credit Date</b> ko bulk me 🏦 <b>AC Credit</b> (📒 Khata ke andar) se update karein. Comment / Bulk Comment bhi usi 🏦 popup me hai. <button class="btn btn-blue btn-sm" onclick="openACInKhata()">🏦 Kholein</button></p>
-<div class="table-wrap mt">
-          <table>
-            <thead><tr><th><input type="checkbox" id="demandListSelectAll" onchange="toggleDemandListSelectAll()"></th><th style="width:36px;text-align:center">#</th><th>Date</th><th>Jobcard</th><th>Name</th><th>Kul Din</th><th>Kul Hajri</th><th>Pratidin ₹</th><th>Kul Bhugtan ₹</th><th>Status</th><th>Credit Status</th><th>Credit Date</th><th>Comment</th><th>Action</th></tr></thead>
-            <tbody id="demandTableBody"></tbody>
-          </table>
-        </div>
-        <div id="demandEmpty" class="empty">Koi demand nahi.</div>
-        </div>
-      </div>
     </div>
 
     <!-- ==== PAYMENT TAB (removed — Payment ab ⚡Ek Paste se banti hai) ==== -->
@@ -700,6 +673,12 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
     <button class="close-x" onclick="closeACModal()">✖️</button>
 
 
+        <div class="row" style="gap:6px;margin-bottom:10px">
+          <button class="btn btn-green btn-sm" id="acTabBtn1" onclick="acTab(1)">🏦 AC Credit</button>
+          <button class="btn btn-gray btn-sm" id="acTabBtn2" onclick="acTab(2)">🗂️ Demand List <span id="demandCount" style="font-size:11px"></span></button>
+          <button class="btn btn-gray btn-sm" id="acTabBtn3" onclick="acTab(3)">📅 Demand Dates</button>
+        </div>
+        <div id="acPane1">
         <h3>🏦 AC Credit <span id="acCount" style="font-size:12.5px;color:var(--muted);font-weight:400"></span></h3>
         <div class="row">
           <input type="text" id="acSearch" class="grow" placeholder="🔍 Search by Name / Jobcard" oninput="renderACList()">
@@ -726,12 +705,34 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
         </div>
         <div class="table-wrap mt">
           <table>
-            <thead><tr><th><input type="checkbox" class="hidden"></th><th style="width:36px;text-align:center">#</th><th>Date</th><th>Jobcard</th><th>Name</th><th>Kul ₹</th><th>Mate Share ₹</th><th>Diya ₹</th><th>Mate Status</th><th>Status / Credited Date</th><th>Comment</th><th>Action</th></tr></thead>
+            <thead><tr><th><input type="checkbox" class="hidden"></th><th style="width:36px;text-align:center">#</th><th>Date</th><th>Jobcard</th><th>Name</th><th>Kul ₹</th><th>Mate Share ₹</th><th>Mate Status</th><th>Status / Credited Date</th><th>Comment</th><th>Action</th></tr></thead>
             <tbody id="acTableBody"></tbody>
           </table>
         </div>
-        <p style="font-size:12px;color:var(--muted);margin-top:8px"><b>Diya ₹</b> sirf dikhta hai — Labour ne kitna diya wo 📒 Khata me <b>🟢 MILE ₹</b> se likhein (paisa ek hi jagah se ghatega). <b>Mate Status</b> Comment se aata hai: khaali = ⏳ Pending, kuch likha = ✅ Mila.</p>
+        <p style="font-size:12px;color:var(--muted);margin-top:8px">Labour ne kitna diya wo 📒 Khata me <b>🟢 MILE ₹</b> se likhein. <b>Mate Status</b> Comment se aata hai: khaali = ⏳ Pending, kuch likha = ✅ Mila.</p>
         <div id="acEmpty" class="empty">Koi payment nahi.</div>
+        </div>
+        <div id="acPane2" class="hidden">
+        <div class="row mt">
+          <input type="text" id="demandListSearch" class="grow" placeholder="🔍 Search by Name / Jobcard" oninput="renderDemands()">
+          <div class="field grow"><label>Filter by Date</label><input type="date" id="demandFilterDate" onchange="renderDemands()"></div>
+          <button class="btn btn-gray btn-sm" onclick="clearDemandFilter()">Clear Filter</button>
+          <button class="btn btn-red btn-sm" onclick="bulkDeleteDemands()">🗑️ Bulk Delete Selected</button>
+          <button class="btn btn-gray btn-sm" onclick="manualRefresh('past')">🔄 Refresh</button>
+        </div>
+        <p style="font-size:12px;color:var(--muted);margin-top:8px">ℹ️ <b>Credit Status / Credit Date</b> ko bulk me 🏦 <b>AC Credit</b> (📒 Khata ke andar) se update karein. Comment / Bulk Comment bhi usi 🏦 popup me hai. <button class="btn btn-blue btn-sm" onclick="openACInKhata()">🏦 Kholein</button></p>
+<div class="table-wrap mt">
+          <table>
+            <thead><tr><th><input type="checkbox" id="demandListSelectAll" onchange="toggleDemandListSelectAll()"></th><th style="width:36px;text-align:center">#</th><th>Date</th><th>Jobcard</th><th>Name</th><th>Kul Din</th><th>Kul Hajri</th><th>Pratidin ₹</th><th>Kul Bhugtan ₹</th><th>Status</th><th>Credit Status</th><th>Credit Date</th><th>Comment</th><th>Action</th></tr></thead>
+            <tbody id="demandTableBody"></tbody>
+          </table>
+        </div>
+        <div id="demandEmpty" class="empty">Koi demand nahi.</div>
+        </div>
+        <div id="acPane3" class="hidden">
+          <p style="font-size:12px;color:var(--muted);margin:0 0 8px">🟢 sab Credit &nbsp; 🟠 kuch baaki &nbsp; ⚪ abhi koi nahi. Date dabao — highlight hoga aur us din ke naam khulenge.</p>
+          <div id="demandDatesList" class="mt"></div>
+        </div>
       
         
   </div>
@@ -787,7 +788,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   }
 </script>
-<script src="app.js?v=42"></script>
+<script src="app.js?v=43"></script>
 <script>
 /* Agar app.js load hi na ho (404 / internet / purani cache) to Login button "dead" lagta hai —
    user ko saaf message dikhao ki asli problem kya hai */

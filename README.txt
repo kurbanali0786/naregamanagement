@@ -106,3 +106,5 @@
 ═══════════════════════════════════════════════════════════════
 
 v42: AC Credit popup (Khata se khulta hai) me ab Comment (har row ka 💾) aur Bulk Comment bhi hai — comment likhte hi Khata me Mila entry ban jaati hai. Demand List se Bulk Comment hata diya. Neeche ka "Labour Profile History" hata diya (sab features Labour Khata me hain). Entry edit/delete Labour Khata ke andar pehle jaisa.
+
+v43: AC popup me 3 tab — AC Credit / Demand List / Demand Dates. "Diya" column hata diya. Demand Dates me har date par goli (🟢 sab Credit, 🟠 kuch baaki, ⚪ koi nahi), baaki ginti, us din ka kul ₹, date dabane par highlight aur "🏦 AC" button (us date ka AC Credit khulta hai). Past tab se Demand List / Demand Dates hata diye (popup me aa gaye).

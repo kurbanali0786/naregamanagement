@@ -3030,35 +3030,64 @@ function bulkApplyComment(){
 }
 
 // Sabhi Demand Dates ki list — click karke us din ka data khulta/band hota hai
+let ddSelDate = null;
 function renderDemandDates(){
   const box = $("demandDatesList");
   if(!box) return;
   const dates = [...new Set(DATA.demands.map(d => d.date))].sort().reverse();
   if(!dates.length){ box.innerHTML = `<div class="empty">Koi Demand nahi hai.</div>`; return; }
-
   box.innerHTML = dates.map((dt, i) => {
     const entries = DATA.demands.filter(d => d.date === dt);
+    let cred = 0, total = 0;
     const itemsHtml = entries.map(e => {
       const l = DATA.labours.find(x => x.id === e.labourId) || {};
       const p = DATA.payments.find(x => x.date === dt && x.labourId === e.labourId);
+      const ac = DATA.acCredits.find(x => x.date === dt && x.labourId === e.labourId);
+      const isC = ac && ac.status === "Credited";
+      if(isC) cred++;
+      total += p ? (Number(p.amount) || 0) : 0;
       const hasComment = e.comment && String(e.comment).trim();
       return `
         <div class="dd-item">
-          <span>${escapeHtml(l.name || "—")} — ${e.kulDin || 0} Din</span>
+          <span>${isC ? "🟢" : "⚪"} ${escapeHtml(l.name || "—")} — ${e.kulDin || 0} Din</span>
           <span>₹${p ? p.amount : 0} ${hasComment ? `<span class="badge active">${escapeHtml(e.comment)}</span>` : `<span class="badge pending">Khaali</span>`}</span>
         </div>`;
     }).join("");
+    const n = entries.length, left = n - cred;
+    const cls = cred === n ? "all" : (cred > 0 ? "part" : "");
+    const sel = ddSelDate === dt;
     return `
-      <div class="dd-date-row" onclick="toggleDemandDate(${i})">
-        <span>📅 ${fmtDate(dt)}</span><span class="dd-count">${entries.length} Labour</span>
+      <div class="dd-date-row ${sel ? "sel" : ""}" onclick="toggleDemandDate(${i}, '${dt}')">
+        <span style="display:flex;align-items:center;gap:8px"><span class="dd-dot ${cls}"></span>${fmtDate(dt)}</span>
+        <span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+          <span class="dd-count">${n} Labour${left > 0 ? " · " + left + " baaki" : ""}</span>
+          <span class="dd-count" style="background:#eef0ee;color:#333">₹${total}</span>
+          <button class="btn btn-blue btn-sm" style="padding:2px 8px;font-size:11px" onclick="event.stopPropagation();openACForDate('${dt}')">🏦 AC</button>
+        </span>
       </div>
-      <div class="dd-detail" id="ddDetail-${i}">${itemsHtml}</div>
+      <div class="dd-detail ${sel ? "open" : ""}" id="ddDetail-${i}">${itemsHtml}</div>
     `;
   }).join("");
 }
-function toggleDemandDate(i){
-  const el = $("ddDetail-" + i);
-  if(el) el.classList.toggle("open");
+// Demand Dates ki ek date ko AC Credit me kholo (us date ka filter lag jata hai)
+function openACForDate(dt){
+  $("acDate").value = dt;
+  acTab(1);
+  renderACList();
+}
+function acTab(n){
+  [1,2,3].forEach(i => {
+    $("acPane" + i).classList.toggle("hidden", i !== n);
+    const b = $("acTabBtn" + i);
+    b.classList.toggle("btn-green", i === n);
+    b.classList.toggle("btn-gray", i !== n);
+  });
+  if(n === 2) renderDemands();
+  if(n === 3) renderDemandDates();
+}
+function toggleDemandDate(i, dt){
+  ddSelDate = (ddSelDate === dt) ? null : dt;
+  renderDemandDates();
 }
 
 // Jin Demand ka payment CREDIT ho chuka hai lekin Comment abhi bhi khaali hai
@@ -3177,7 +3206,7 @@ function renderDemands(){
     });
   }
 
-  $("demandCount").textContent = "(" + list.length + " Demand)";
+  $("demandCount").textContent = "(" + list.length + ")"; if($("demandCountX")) $("demandCountX").textContent = list.length + " Demand";
 
   $("demandTableBody").innerHTML = list.map((d, i) => {
     const l = DATA.labours.find(x => x.id === d.labourId) || {};
@@ -3352,9 +3381,6 @@ function renderACList(){
         <td>₹${p.amount}</td>
         <td>₹${mate.toFixed(2)}</td>
         <td>${credited
-          ? (getPaymentPaid(p) ? "₹" + getPaymentPaid(p) : "—")
-          : `<span style="color:var(--muted);font-size:12px">—</span>`}</td>
-        <td>${credited
           ? (mStatus === "mila" ? `<span class="badge credited">✅ Mila</span>` : `<span class="badge pending">⏳ Pending</span>`)
           : `<span style="color:var(--muted);font-size:12px">—</span>`}</td>
         <td>
@@ -3460,6 +3486,7 @@ function updateACDiya(paymentId, value){
 function refreshPaymentViews(){
   if(currentLedgerLabourId) renderLedgerModal();
   renderACList();
+  if($("acPane3") && !$("acPane3").classList.contains("hidden")) renderDemandDates();
   generateReport();
   renderDashboard();
   renderDashboardKhata();
