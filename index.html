@@ -350,6 +350,10 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
         <h3>📒 Labour Khata (Mate Share Hisaab)</h3>
         <p style="font-size:12.5px;color:var(--muted);margin-bottom:10px">Har Labour ka apna khata — AC Credit hote hi uska <b>Mate Share baaki</b> yahan chadh jata hai. Jitna Labour ne diya (<b style="color:#146c33">🟢 Mile</b>) aur jitna aapne diya (<b style="color:#c0392b">🔴 Diye</b>), sab ka running balance. Naam par tap karke poora khata kholein.</p>
         <div class="summary-grid" id="dashKhataSummary"></div>
+        <div class="row">
+          <button class="btn btn-outline btn-sm" id="dashPendBtn" onclick="openPendingPopup(null)">⏳ Credit baaki</button>
+          <button class="btn btn-green btn-sm" onclick="openBulkDiya()">👥 Bulk Diya</button>
+        </div>
         <div class="row mt">
           <input type="text" id="dashKhataSearch" class="grow" placeholder="🔍 Naam ya Jobcard se dhoondein" oninput="renderDashboardKhata()">
           <label style="font-size:12.5px;white-space:nowrap"><input type="checkbox" id="dashKhataOnlyPending" onchange="renderDashboardKhata()"> ⏳ Sirf Pending</label>
@@ -744,6 +748,39 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
 </div>
 
 <!-- ============ LABOUR KHATA / LEDGER (Khatabook jaisa) ============ -->
+
+<!-- ⏳ Credit baaki popup -->
+<div id="pendingModalOverlay" class="modal-overlay-lg hidden" style="z-index:8100" onclick="if(event.target.id==='pendingModalOverlay')closePendingPopup()">
+  <div class="modal-lg" style="max-width:460px"><div id="pendingModalBody"></div></div>
+</div>
+
+<!-- 👥 Bulk Diya -->
+<div id="bulkModalOverlay" class="modal-overlay-lg hidden" style="z-index:8100" onclick="if(event.target.id==='bulkModalOverlay')closeBulkDiya()">
+  <div class="modal-lg" style="max-width:520px">
+    <h3 style="margin-bottom:4px">👥 Bulk Diya</h3>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 8px">Jin Labour ne diya unhe select karein, kitna diya chunein, Comment likhein, phir Save. Sabke khata me payment-wise chadh jayega.</p>
+    <div class="row">
+      <div class="field grow"><label>Kitna diya</label>
+        <select id="bulkMode" onchange="renderBulkDiya()"><option value="half">Aadha (hisse ka 50%)</option><option value="full">Poora hissa</option><option value="fix">Fix rakam ₹</option></select></div>
+      <div class="field grow" id="bulkFixWrap"><label>Rakam ₹</label><input type="number" id="bulkFix" min="0" oninput="renderBulkDiya()" placeholder="0"></div>
+    </div>
+    <div class="row">
+      <div class="field grow"><label>Payment date</label><select id="bulkPayDate" onchange="renderBulkDiya()"></select></div>
+      <div class="field grow"><label>Mile ki date</label><input type="date" id="bulkDate"></div>
+    </div>
+    <div class="field"><label>Comment (Report me bhi chadhega)</label><input type="text" id="bulkNote" placeholder="jaise: diya"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:6px 0">
+      <label style="font-size:13px"><input type="checkbox" id="bulkAll" style="width:auto;display:inline" onchange="toggleBulkAll(this.checked)"> Sabhi select karein</label>
+      <span id="bulkCnt" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <div class="chk-list" id="bulkRows" style="max-height:300px"></div>
+    <div class="row mt">
+      <button class="btn btn-gray btn-sm" onclick="closeBulkDiya()">Cancel</button>
+      <button class="btn btn-green" style="flex:1" onclick="saveBulkDiya()">💾 Save — sabke khata me chadhao</button>
+    </div>
+  </div>
+</div>
+
 <div id="ledgerModalOverlay" class="modal-overlay-lg hidden">
   <div class="modal-lg">
     <button class="close-x" onclick="closeLedgerModal()">✖️</button>
@@ -794,7 +831,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   }
 </script>
-<script src="app.js?v=37"></script>
+<script src="app.js?v=38"></script>
 <script>
 /* Agar app.js load hi na ho (404 / internet / purani cache) to Login button "dead" lagta hai —
    user ko saaf message dikhao ki asli problem kya hai */

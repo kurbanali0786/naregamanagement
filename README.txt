@@ -1,3 +1,13 @@
+🆕 FINAL (v38) — Khata ab Khatabook jaisa, payment-wise
+- Payment Credit hote hi uska aapka 50% hissa Labour ke Khata me "Baaki juda" (lal) me chadhta hai.
+- "MILA ₹" (hara): Labour ne jo diya wo usi payment par lagta hai (aadha/poora). Zyada diya to agle baaki payment par.
+- "ADVANCE DIYA ₹" (lal): pehle diya hua, agle baaki se kat jata hai.
+- ⏳ icon: Sarkar ne jo payment Credit nahi kiye (Dashboard par sab Labour ke, Labour ke andar sirf usi ke). Wahin se "Credit hua ✔".
+- 👥 Bulk Diya (Dashboard Khata): kai Labour select, Aadha/Poora/Fix, Comment, Save -> sabke Khata me chadh jata hai.
+- Khata ki Entry par tap -> badlein / delete.
+- Diya AC Credit aur Report me sirf dikhta hai; likhna sirf Khata (ya Bulk Diya) se.
+- Payment Pending card hata, Khata ke upar ke Baaki cards hata, Form 6 + Form 10 PDF.
+
 🧹 v37: Diya ab sirf Khata ki 🟢 MILE entry se (AC Credit/Report me sirf dikhta hai); Payment Pending card aur Dashboard ka duplicate Mate Share Baaki card hata diya.
 
 🛠 v36: AC Credit / Undo karte hi Khata list turant update hoti hai (pehle refresh ke baad dikhti thi).
