@@ -1,3 +1,9 @@
+🆕 v39 — Khata ekdam simple (sirf Baaki Balance + Len-Den)
+- Payment Credit hote hi uski entry Khata me judti hai (Baaki badhta hai). Koi "hissa / aadha / poora" nahi.
+- Jis payment ke aage Comment likha hai (ya Bulk Diya se likha) uska Mila (credit) APNE-APNE ban jata hai. Jiske aage kuch nahi, uska sirf entry rehti hai.
+- MILA ₹ / ADVANCE DIYA ₹ se seedhi entry. Entry par tap -> badlein/delete.
+- Bulk Diya: Labour select + Comment + Save -> sabke Khata me Mila.
+
 🆕 FINAL (v38) — Khata ab Khatabook jaisa, payment-wise
 - Payment Credit hote hi uska aapka 50% hissa Labour ke Khata me "Baaki juda" (lal) me chadhta hai.
 - "MILA ₹" (hara): Labour ne jo diya wo usi payment par lagta hai (aadha/poora). Zyada diya to agle baaki payment par.

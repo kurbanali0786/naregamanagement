@@ -758,16 +758,8 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
 <div id="bulkModalOverlay" class="modal-overlay-lg hidden" style="z-index:8100" onclick="if(event.target.id==='bulkModalOverlay')closeBulkDiya()">
   <div class="modal-lg" style="max-width:520px">
     <h3 style="margin-bottom:4px">👥 Bulk Diya</h3>
-    <p style="font-size:12px;color:var(--muted);margin:0 0 8px">Jin Labour ne diya unhe select karein, kitna diya chunein, Comment likhein, phir Save. Sabke khata me payment-wise chadh jayega.</p>
-    <div class="row">
-      <div class="field grow"><label>Kitna diya</label>
-        <select id="bulkMode" onchange="renderBulkDiya()"><option value="half">Aadha (hisse ka 50%)</option><option value="full">Poora hissa</option><option value="fix">Fix rakam ₹</option></select></div>
-      <div class="field grow" id="bulkFixWrap"><label>Rakam ₹</label><input type="number" id="bulkFix" min="0" oninput="renderBulkDiya()" placeholder="0"></div>
-    </div>
-    <div class="row">
-      <div class="field grow"><label>Payment date</label><select id="bulkPayDate" onchange="renderBulkDiya()"></select></div>
-      <div class="field grow"><label>Mile ki date</label><input type="date" id="bulkDate"></div>
-    </div>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 8px">Jin Labour ne diya unhe select karein, Comment likhein, Save. Sabke Khata me apne-aap Mila (credit) ban jayega.</p>
+    <div class="field"><label>Payment date</label><select id="bulkPayDate" onchange="renderBulkDiya()"></select></div>
     <div class="field"><label>Comment (Report me bhi chadhega)</label><input type="text" id="bulkNote" placeholder="jaise: diya"></div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin:6px 0">
       <label style="font-size:13px"><input type="checkbox" id="bulkAll" style="width:auto;display:inline" onchange="toggleBulkAll(this.checked)"> Sabhi select karein</label>
@@ -831,7 +823,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   }
 </script>
-<script src="app.js?v=38"></script>
+<script src="app.js?v=39"></script>
 <script>
 /* Agar app.js load hi na ho (404 / internet / purani cache) to Login button "dead" lagta hai —
    user ko saaf message dikhao ki asli problem kya hai */

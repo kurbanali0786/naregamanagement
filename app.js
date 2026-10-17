@@ -552,8 +552,14 @@ function computeLedgers(onlyLabourId){
     const paid = getPaymentPaid(p, paidMap);
     const left = Math.max(0, round2(mate - paid));
     add(p.labourId, { kind: "due", date: dueDate, amount: mate, order: 0, paymentId: p.id, paid, left,
-      comment: "Payment ₹" + (Number(p.amount) || 0) + " — aapka hissa (Demand " + fmtDate(p.date) + ")",
+      comment: "Payment ₹" + (Number(p.amount) || 0) + " (" + fmtDate(p.date) + ")",
       status: left <= 0 ? "mila" : demandCommentStatus(dem) });
+    // Comment likha hai = paisa mil gaya -> baaki hissa apne-aap "Mila" (credit) ban jata hai
+    if(dem && dem.comment && String(dem.comment).trim()){
+      const autoAmt = Math.max(0, round2(mate - paid));
+      if(autoAmt > 0) add(p.labourId, { kind: "mile", auto: true, paymentId: p.id, date: dueDate, amount: autoAmt, order: 1,
+        comment: "Comment: " + String(dem.comment).trim() });
+    }
     const diya = Number(ac.diya) || 0;
     if(diya > 0){
       add(p.labourId, { kind: "mile", legacy: true, paymentId: p.id, date: ac.diyaDate || dueDate, amount: diya, order: 1,
@@ -754,10 +760,6 @@ function closeLedgerModal(){
   renderPaymentPending();
 }
 function openLedgerEntryForm(type){
-  if(type === "mile"){
-    const has = DATA.payments.some(p => p.labourId === currentLedgerLabourId && isPaymentCredited(p) && getPaymentLeft(p) > 0);
-    if(!has){ toast("Is Labour ka koi baaki payment nahi hai", "info"); return; }
-  }
   ledgerEntryMode = type;
   ledgerEditKey = null;
   renderLedgerModal();
@@ -773,12 +775,7 @@ function saveLedgerEntry(){
   const date = $("ledgerEntryDate").value || todayISO();
   const note = $("ledgerEntryNote").value;
   if(amt <= 0){ toast("Sahi Amount daalein", "error"); return; }
-  if(ledgerEntryMode === "mile"){
-    const pid = $("ledgerEntryPay") ? $("ledgerEntryPay").value : "";
-    applyMileToPayments(currentLedgerLabourId, pid, amt, note.trim(), date);
-  } else {
-    if(!addManualLedgerEntry(currentLedgerLabourId, "adv", amt, note, date)) return;
-  }
+  if(!addManualLedgerEntry(currentLedgerLabourId, ledgerEntryMode === "mile" ? "mile" : "adv", amt, note, date)) return;
   ledgerEntryMode = null;
   renderLedgerModal();
   renderDashboardKhata();
@@ -861,17 +858,9 @@ function renderLedgerModal(){
 
   let formHtml = "";
   if(ledgerEntryMode){
-    let payOpts = "";
-    if(ledgerEntryMode === "mile"){
-      const pm = getPaidMap();
-      payOpts = DATA.payments.filter(p => p.labourId === l.id && isPaymentCredited(p) && getPaymentLeft(p, pm) > 0)
-        .sort((a, b) => String(a.date).localeCompare(String(b.date)))
-        .map(p => `<option value="${p.id}">${fmtDate(p.date)} — baaki ₹${getPaymentLeft(p, pm).toFixed(2)}</option>`).join("");
-    }
     formHtml = `
     <div class="lg-form ${ledgerEntryMode === "mile" ? "mile" : "diye"}">
-      <div class="lg-form-title">${ledgerEntryMode === "mile" ? escapeHtml(l.name) + " ne diye" : escapeHtml(l.name) + " ko advance diya"}</div>
-      ${ledgerEntryMode === "mile" ? `<div class="field"><label>Kis payment par</label><select id="ledgerEntryPay">${payOpts}</select></div>` : `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Ye amount agle payments ke baaki se apne-aap kat jayega.</div>`}
+      <div class="lg-form-title">${ledgerEntryMode === "mile" ? escapeHtml(l.name) + " se mila" : escapeHtml(l.name) + " ko advance diya"}</div>
       <div class="row">
         <div class="field grow"><label>Amount ₹</label><input type="number" id="ledgerEntryAmount" min="0" step="any" placeholder="0"></div>
         <div class="field grow"><label>Date</label><input type="date" id="ledgerEntryDate" value="${todayISO()}"></div>
@@ -914,11 +903,6 @@ function renderLedgerModal(){
     </div>
     <div class="lg-balcard" style="margin-top:8px">
       <div><div style="font-size:12px;color:var(--muted)">${bal < 0 ? "Zyada Diya (−)" : "Baaki"}</div><div class="lg-bal" style="color:${balColor}">${money(bal)}</div></div>
-      <div style="font-size:11.5px;color:var(--muted);text-align:right;line-height:1.6">
-        Kul hissa: <b>${money(lg.kulAaya)}</b><br>
-        Mila: <b style="color:#146c33">${money(lg.kulMila)}</b><br>
-        Advance: <b style="color:#c0392b">${money(lg.kulDiye)}</b>
-      </div>
     </div>
     <div class="row" style="margin:8px 0">
       <button class="btn btn-orange btn-sm" onclick="downloadLabourKhataPDF('${l.id}')">📄 PDF</button>
@@ -931,11 +915,9 @@ function renderLedgerModal(){
     <div id="ledgerRows">
       ${rows.length ? rows.map(r => {
         const editKey = r.manual ? "L:" + r.id : (r.legacy ? "A:" + r.paymentId : "");
-        const tag = r.kind === "due"
-          ? (r.left <= 0 ? '<span class="badge credited">✅ Mila</span>' : `<span class="badge pending">${r.status === "mila" ? "✅ Comment" : "⏳"} Baaki ₹${r.left.toFixed(2)}</span>`)
-          : "";
+        const tag = "";
         const clickAttr = editKey ? `onclick="openLedgerEdit('${editKey}')" style="cursor:pointer" title="Badalne ke liye tap karein"` : "";
-        const label = r.kind === "adv" ? "Advance (baaki se kata)" : (r.kind === "mile" ? "Mila" : "");
+        const label = r.kind === "adv" ? "Advance" : (r.kind === "mile" ? "Mila" : "");
         return `
         <div class="lg-row" ${clickAttr}>
           <div class="lg-main">
@@ -977,11 +959,11 @@ function renderPendingPopup(){
   const title = pendingPopupLabourId ? "⏳ " + escapeHtml(nm(pendingPopupLabourId)) + " — Credit baaki" : "⏳ Sarkar Credit baaki — sab Labour";
   $("pendingModalBody").innerHTML = `
     <h3 style="margin-bottom:4px">${title}</h3>
-    <p style="font-size:12px;color:var(--muted);margin:0 0 8px">Ye payments abhi Khata ke baaki me nahi judte. Credit hote hi apne-aap judd jayenge.</p>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 8px">Ye payments abhi Khata me nahi judte. Credit hote hi apne-aap entry ban jayegi.</p>
     ${list.length ? list.map(w => `
       <div class="lg-row" style="grid-template-columns:1fr auto;align-items:center">
         <div class="lg-main"><div class="lg-date"><b>${pendingPopupLabourId ? "" : escapeHtml(nm(w.labourId)) + " · "}${fmtDate(w.date)}</b></div>
-          <div class="lg-note">Payment ₹${w.payment} · aapka hissa ₹${w.amount.toFixed(2)}</div></div>
+          <div class="lg-note">Payment ₹${w.payment} · credit hone par baaki me judega ₹${w.amount.toFixed(2)}</div></div>
         <button class="btn btn-green btn-sm" onclick="creditFromPopup('${w.paymentId}')">Credit hua ✔</button>
       </div>`).join("") : `<div class="empty">Koi payment baaki nahi 🎉</div>`}
     <div class="row mt"><button class="btn btn-gray btn-sm" style="flex:1" onclick="closePendingPopup()">Band karein</button></div>`;
@@ -999,33 +981,25 @@ function creditFromPopup(paymentId){
 let bulkSel = {};
 function openBulkDiya(){
   bulkSel = {};
-  $("bulkDate").value = todayISO();
   $("bulkNote").value = "diya";
-  $("bulkMode").value = "half";
-  $("bulkFix").value = "";
   $("bulkPayDate").value = "";
   renderBulkDiya();
   $("bulkModalOverlay").classList.remove("hidden");
 }
 function closeBulkDiya(){ $("bulkModalOverlay").classList.add("hidden"); }
+// Credited payment jinka Comment abhi khaali hai (matlab paisa abhi nahi mila)
 function getBulkEligible(){
-  const pm = getPaidMap();
   const f = $("bulkPayDate") ? $("bulkPayDate").value : "";
-  return DATA.payments.filter(p => isPaymentCredited(p) && getPaymentLeft(p, pm) > 0 && (!f || p.date === f))
-    .sort((a, b) => String(a.date).localeCompare(String(b.date)) || ((DATA.labours.find(x => x.id === a.labourId) || {}).name || "").localeCompare((DATA.labours.find(x => x.id === b.labourId) || {}).name || ""));
-}
-function bulkAmountFor(p){
-  const mode = $("bulkMode").value, left = getPaymentLeft(p), mate = (Number(p.amount) || 0) * 0.5;
-  if(mode === "full") return left;
-  if(mode === "half") return Math.min(left, round2(mate / 2));
-  return Math.min(left, Number($("bulkFix").value) || 0);
+  const nm = id => (DATA.labours.find(x => x.id === id) || {}).name || "";
+  return DATA.payments.filter(p => {
+    if(!isPaymentCredited(p) || (f && p.date !== f)) return false;
+    const d = DATA.demands.find(x => x.date === p.date && x.labourId === p.labourId);
+    return d && !(d.comment && String(d.comment).trim());
+  }).sort((a, b) => String(a.date).localeCompare(String(b.date)) || nm(a.labourId).localeCompare(nm(b.labourId)));
 }
 function renderBulkDiya(){
-  $("bulkFixWrap").style.display = $("bulkMode").value === "fix" ? "flex" : "none";
-  // date filter options
   const sel = $("bulkPayDate"), cur = sel.value;
-  const pmAll = getPaidMap();
-  const dates = Array.from(new Set(DATA.payments.filter(p => isPaymentCredited(p) && getPaymentLeft(p, pmAll) > 0).map(p => p.date))).sort().reverse();
+  const dates = Array.from(new Set((function(){ const f = sel.value; sel.value = ""; const l = getBulkEligible(); sel.value = f; return l; })().map(p => p.date))).sort().reverse();
   sel.innerHTML = `<option value="">Sabhi dates</option>` + dates.map(d => `<option value="${d}" ${d === cur ? "selected" : ""}>${fmtDate(d)}</option>`).join("");
   const list = getBulkEligible();
   const nm = id => (DATA.labours.find(x => x.id === id) || {}).name || "—";
@@ -1033,34 +1007,31 @@ function renderBulkDiya(){
   $("bulkRows").innerHTML = list.length ? list.map(p => {
     const on = !!bulkSel[p.id]; if(on) n++;
     return `<label class="chk-item" style="cursor:pointer"><input type="checkbox" ${on ? "checked" : ""} onchange="toggleBulkSel('${p.id}', this.checked)">
-      <div style="flex:1"><b>${escapeHtml(nm(p.labourId))}</b><div style="font-size:11.5px;color:var(--muted)">${fmtDate(p.date)} · hissa ₹${((Number(p.amount) || 0) * 0.5).toFixed(2)} · baaki ₹${getPaymentLeft(p).toFixed(2)}</div></div>
-      <div style="font-weight:700;color:#146c33">${on ? "₹" + bulkAmountFor(p).toFixed(2) : ""}</div></label>`;
-  }).join("") : `<div class="empty">Koi baaki payment nahi.</div>`;
+      <div style="flex:1"><b>${escapeHtml(nm(p.labourId))}</b><div style="font-size:11.5px;color:var(--muted)">${fmtDate(p.date)} · Payment ₹${Number(p.amount) || 0}</div></div>
+      <div style="font-weight:700;color:#c0392b">₹${((Number(p.amount) || 0) * 0.5).toFixed(2)}</div></label>`;
+  }).join("") : `<div class="empty">Koi baaki payment nahi — sab ka Comment/Mila ho chuka hai.</div>`;
   $("bulkCnt").textContent = n + " select";
   $("bulkAll").checked = list.length > 0 && n === list.length;
 }
 function toggleBulkSel(id, on){ bulkSel[id] = on; renderBulkDiya(); }
 function toggleBulkAll(on){ getBulkEligible().forEach(p => { bulkSel[p.id] = on; }); renderBulkDiya(); }
+// Save: chune hue sabhi payments ke Demand par Comment likh deta hai -> Khata me apne-aap "Mila" (credit) ban jata hai
 function saveBulkDiya(){
-  const date = $("bulkDate").value || todayISO();
   const note = ($("bulkNote").value || "").trim() || "diya";
   let c = 0, tot = 0;
   getBulkEligible().forEach(p => {
     if(!bulkSel[p.id]) return;
-    const a = bulkAmountFor(p);
-    if(a <= 0) return;
-    addManualLedgerEntry(p.labourId, "mile", a, note + " (bulk)", date, p.id);
-    // Comment bhi bhar do (khaali ho to) — Report me dikhega aur Mate Status Mila banega
     const dem = DATA.demands.find(d => d.date === p.date && d.labourId === p.labourId);
-    if(dem && !(dem.comment && String(dem.comment).trim())) dem.comment = note;
-    c++; tot += a;
+    if(!dem) return;
+    dem.comment = note;
+    c++; tot += (Number(p.amount) || 0) * 0.5;
   });
-  if(!c){ toast("Pehle Labour select karein aur rakam dekhein", "error"); return; }
+  if(!c){ toast("Pehle Labour select karein", "error"); return; }
   persist();
   bulkSel = {};
   closeBulkDiya();
   refreshPaymentViews();
-  toast(c + " Labour ke khata me ₹" + tot.toFixed(2) + " chadh gaya ✅");
+  toast(c + " Labour ke khata me ₹" + tot.toFixed(2) + " Mila ho gaya ✅");
 }
 
 $("ledgerModalOverlay").addEventListener("click", e => {
