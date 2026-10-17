@@ -1130,9 +1130,18 @@ function shareKhataPDF(){ downloadKhataPDF("share"); }
 /* ---------------------------------------------------------------
    TABS
 --------------------------------------------------------------- */
-const TAB_ORDER = ["dashboard", "labour", "past", "accredit", "report", "nrega"];
+const TAB_ORDER = ["dashboard", "labour", "past", "report", "nrega"];
+
+// AC Credit ab Dashboard ke 📒 Khata ke andar hai — purane links yahin kholte hain
+function openACInKhata(){
+  switchTab("dashboard");
+  const box = $("khataAcBox"), btn = $("btnKhataAc");
+  if(box && !box.classList.contains("show") && btn) toggleAcc("khataAcBox", btn);
+  if(box) box.scrollIntoView({ behavior: "smooth", block: "start" });
+}
 
 function switchTab(name){
+  if(name === "accredit"){ openACInKhata(); return; }
   document.querySelectorAll("nav.tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
   document.querySelectorAll("main .panel").forEach(p => p.classList.remove("active"));
   $("panel-" + name).classList.add("active");
@@ -1175,7 +1184,7 @@ setupSwipeNav();
 
 // Har tab ka data dobara render karo — manual "Refresh" button aur tab-switch dono isi se chalte hain
 function refreshTab(name){
-  if(name === "dashboard"){ renderDashboard(); renderDashboardKhata(); renderLabourProfileList(); }
+  if(name === "dashboard"){ renderDashboard(); renderDashboardKhata(); renderLabourProfileList(); renderACList(); }
   if(name === "labour") renderLabours();
   if(name === "past"){
     if($("onePasteDate") && !$("onePasteDate").value) $("onePasteDate").value = todayISO();
@@ -1183,7 +1192,6 @@ function refreshTab(name){
     renderDemandLabourList();
     renderDemands();
   }
-  if(name === "accredit"){ renderACList(); }
   if(name === "report") generateReport();
   if(name === "nrega"){ renderNregaSearch(); buildNregaFormTable(); }
 }
