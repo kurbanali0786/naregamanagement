@@ -1,3 +1,7 @@
+🆕 v40 — AC Credit ab 📒 Khata ke andar (Dashboard)
+- Alag 🏦 tab hata; Dashboard ke Labour Khata me "🏦 AC Credit Dikhayein" button. Sare feature wahi: Search, Date filter, All Dates, Credited Date, Select All, Bulk AC Credit, Bulk Undo, ek-ek Credit/Undo, Credited Date badalna, Mate Status.
+- Purane "AC Credit kholein" links seedha yahin kholte hain.
+
 🆕 v39 — Khata ekdam simple (sirf Baaki Balance + Len-Den)
 - Payment Credit hote hi uski entry Khata me judti hai (Baaki badhta hai). Koi "hissa / aadha / poora" nahi.
 - Jis payment ke aage Comment likha hai (ya Bulk Diya se likha) uska Mila (credit) APNE-APNE ban jata hai. Jiske aage kuch nahi, uska sirf entry rehti hai.
@@ -100,3 +104,5 @@
 4. App kholein
 
 ═══════════════════════════════════════════════════════════════
+
+v42: AC Credit popup (Khata se khulta hai) me ab Comment (har row ka 💾) aur Bulk Comment bhi hai — comment likhte hi Khata me Mila entry ban jaati hai. Demand List se Bulk Comment hata diya. Neeche ka "Labour Profile History" hata diya (sab features Labour Khata me hain). Entry edit/delete Labour Khata ke andar pehle jaisa.

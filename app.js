@@ -1135,9 +1135,12 @@ const TAB_ORDER = ["dashboard", "labour", "past", "report", "nrega"];
 // AC Credit ab Dashboard ke 📒 Khata ke andar hai — purane links yahin kholte hain
 function openACInKhata(){
   switchTab("dashboard");
-  const box = $("khataAcBox"), btn = $("btnKhataAc");
-  if(box && !box.classList.contains("show") && btn) toggleAcc("khataAcBox", btn);
-  if(box) box.scrollIntoView({ behavior: "smooth", block: "start" });
+  renderACList();
+  $("acModalOverlay").classList.remove("hidden");
+}
+function closeACModal(){
+  $("acModalOverlay").classList.add("hidden");
+  renderDashboardKhata();
 }
 
 function switchTab(name){
@@ -3338,6 +3341,7 @@ function renderACList(){
     const creditedDate = ac ? (ac.creditedDate || ac.date) : "";
     const mate = (Number(p.amount) || 0) * 0.5;
     const mStatus = credited ? paymentMateStatus(p) : null;
+    const dem = demMap[p.date + "|" + p.labourId];
     return `
       <tr>
         <td><input type="checkbox" class="ac-row-chk" value="${p.id}"></td>
@@ -3359,6 +3363,9 @@ function renderACList(){
             <input type="date" class="ac-date-edit" value="${creditedDate}" style="width:132px;font-size:11.5px;padding:4px 5px" onchange="updateACCreditedDate('${p.id}', this.value)">
           </div>` : ""}
         </td>
+        <td style="min-width:150px">${dem
+          ? `<div style="display:flex;gap:4px"><input type="text" id="acc-${dem.id}" value="${escapeHtml(dem.comment || "")}" placeholder="comment..." style="min-width:100px;font-size:12px;padding:4px 6px" onkeydown="if(event.key==='Enter')saveACComment('${dem.id}')"><button class="btn btn-gray btn-sm" title="Save" onclick="saveACComment('${dem.id}')">💾</button></div>`
+          : `<span style="color:var(--muted);font-size:12px">—</span>`}</td>
         <td>
           ${credited
             ? `<button class="btn btn-orange btn-sm" onclick="undoACCredit('${p.id}')">Undo</button>`
@@ -3369,6 +3376,32 @@ function renderACList(){
   }).join("");
   $("acEmpty").classList.toggle("hidden", list.length > 0);
   $("acSelectAll").checked = false;
+}
+
+// Comment (AC popup) — ek row ka comment save; Khata me apne-aap Mila/Pending update
+function saveACComment(demandId){
+  const input = $("acc-" + demandId);
+  if(!input) return;
+  updateDemandField(demandId, "comment", input.value);
+  refreshPaymentViews();
+  toast("Comment save ho gaya", "success");
+}
+// Bulk Comment (AC popup) — chune hue payments ke Demand par ek saath comment
+function bulkACComment(){
+  const text = (($("acBulkComment") && $("acBulkComment").value) || "").trim();
+  const ids = Array.from(document.querySelectorAll(".ac-row-chk:checked")).map(c => c.value);
+  if(!ids.length){ toast("Pehle list se kam se kam ek entry select karein", "error"); return; }
+  if(!text){ toast("Comment box khaali hai — pehle comment likhein", "error"); return; }
+  let c = 0;
+  ids.forEach(id => {
+    const p = DATA.payments.find(x => x.id === id); if(!p) return;
+    const d = DATA.demands.find(x => x.date === p.date && x.labourId === p.labourId);
+    if(d){ d.comment = text; c++; }
+  });
+  if(!c){ toast("Chune hue payments ki Demand nahi mili", "error"); return; }
+  persist();
+  refreshPaymentViews();
+  toast(c + " entry pe comment lag gaya", "success");
 }
 
 function clearACFilter(){
