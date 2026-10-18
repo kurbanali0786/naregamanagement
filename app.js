@@ -704,8 +704,8 @@ function renderKhataListInto(elId, term){
       <div class="chk-item" style="cursor:pointer" onclick="openLedgerModal('${l.id}')">
         <div class="lp-avatar">${escapeHtml((l.name || "?").trim().charAt(0).toUpperCase())}</div>
         <div style="flex:1;min-width:0">
-          <div><b>${escapeHtml(l.name)}</b> ${msBadge}</div>
-          <div style="font-size:11.5px;color:var(--muted)">${escapeHtml(l.jobcardNo || "")} · ${last}</div>
+          <div><b>${escapeHtml(l.name)}</b></div>
+          <div style="font-size:11.5px;color:var(--muted)">${escapeHtml(l.jobcardNo || "")}${l.aadhar ? " · 🆔 " + escapeHtml(l.aadhar) : ""} · ${last}</div>
         </div>
         <div style="text-align:right">
           <div class="badge ${cls}" style="font-size:13px">${balTxt}</div>
@@ -918,7 +918,7 @@ function renderLedgerModal(){
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding-right:38px">
       <div><h3 style="margin:0 0 2px">📒 ${escapeHtml(l.name)}</h3>
         <div style="font-size:12px;color:var(--muted)">${escapeHtml(l.jobcardNo || "")}</div></div>
-      <button class="btn btn-outline btn-sm" onclick="openPendingPopup('${l.id}')" title="Sarkar ne abhi Credit nahi kiye">⏳${waitN ? ` <b>${waitN}</b>` : ""}</button>
+      <button class="btn btn-outline btn-sm" onclick="openACPending('${l.id}')" title="Sarkar ne abhi Credit nahi kiye">⏳${waitN ? ` <b>${waitN}</b>` : ""}</button>
     </div>
     <div class="lg-balcard" style="margin-top:8px">
       <div><div style="font-size:12px;color:var(--muted)">${bal < 0 ? "Zyada Diya (−)" : "Baaki"}</div><div class="lg-bal" style="color:${balColor}">${money(bal)}</div></div>
@@ -1156,6 +1156,7 @@ const TAB_ORDER = ["dashboard", "report", "nrega"];
 // AC Credit ab Dashboard ke 📒 Khata ke andar hai — purane links yahin kholte hain
 function openACInKhata(){
   switchTab("dashboard");
+  if($("acOnlyPending")) $("acOnlyPending").checked = false;
   renderACList();
   $("acModalOverlay").classList.remove("hidden");
 }
@@ -3382,6 +3383,9 @@ function renderACList(){
       return (l.name || "").toLowerCase().includes(term) || String(l.jobcardNo || "").toLowerCase().includes(term);
     });
   }
+  if($("acOnlyPending") && $("acOnlyPending").checked){
+    list = list.filter(p => { const a = acMap[p.date + "|" + p.labourId]; return !(a && a.status === "Credited"); });
+  }
 
   $("acCount").textContent = "(" + list.length + " Entries)";
 
@@ -3649,6 +3653,7 @@ function generateReport(){
     const d = r.d, l = r.l, p = r.p;
     return `
       <tr>
+        <td class="nw no-print">${p ? `<input type="checkbox" class="rep-row-chk" value="${p.id}">` : ""}</td>
         <td class="nw">${i + 1}</td>
         <td>${escapeHtml(l.name || "—")}</td>
         <td>${escapeHtml(l.jobcardNo || "—")}</td>
@@ -4381,8 +4386,8 @@ function tickMila(paymentId){
   if(setMila(paymentId, room)){ persist(); toast("Poora Mila ✅ (₹" + room.toFixed(2) + ")", "success"); }
   refreshPaymentViews();
 }
-function bulkMilaFull(){
-  const ids = Array.from(document.querySelectorAll(".ac-row-chk:checked")).map(c => c.value);
+function bulkMilaFull(cls){
+  const ids = Array.from(document.querySelectorAll("." + (cls || "ac-row-chk") + ":checked")).map(c => c.value);
   if(!ids.length){ toast("Pehle list se entry select karein", "error"); return; }
   let c = 0, skip = 0;
   ids.forEach(id => {
@@ -4404,6 +4409,51 @@ function bulkMilaAmount(){
   persist(); refreshPaymentViews();
   toast(c + " entry me ₹" + amt + " Mila" + (skip ? " (" + skip + " skip — Credit nahi / amount zyada)" : ""), c ? "success" : "error");
 }
+// Comment + Kitna Mila ek saath (chune hue rows). Jo khana khaali ho use chhua nahi jata.
+function applyBulkBoth(ids, cText, aText){
+  const comment = (cText || "").trim();
+  const hasAmt = String(aText).trim() !== "";
+  const amt = parseFloat(aText);
+  if(!ids.length){ toast("Pehle table se entry select karein", "error"); return false; }
+  if(!comment && !hasAmt){ toast("Comment ya Kitna Mila — kam se kam ek bharein", "error"); return false; }
+  if(hasAmt && (isNaN(amt) || amt < 0)){ toast("Kitna Mila sahi amount likhein", "error"); return false; }
+  let cc = 0, ca = 0, skip = 0;
+  ids.forEach(id => {
+    const p = DATA.payments.find(x => x.id === id); if(!p) return;
+    const d = DATA.demands.find(x => x.date === p.date && x.labourId === p.labourId);
+    if(comment && d){ d.comment = comment; cc++; }
+    if(hasAmt){ if(setMila(id, amt, true)) ca++; else skip++; }
+  });
+  persist(); refreshPaymentViews();
+  const msg = [];
+  if(cc) msg.push(cc + " me comment");
+  if(ca) msg.push(ca + " me ₹" + amt + " Mila");
+  if(skip) msg.push(skip + " skip (Credit nahi / amount zyada)");
+  toast(msg.join(" · ") || "Kuch nahi laga", (cc || ca) ? "success" : "error");
+  return true;
+}
+function bulkApplyAC(){
+  const ids = Array.from(document.querySelectorAll(".ac-row-chk:checked")).map(c => c.value);
+  if(applyBulkBoth(ids, $("acBulkComment").value, $("acBulkMila").value)){ $("acBulkComment").value = ""; $("acBulkMila").value = ""; }
+}
+function bulkApplyReport(){
+  const ids = Array.from(document.querySelectorAll(".rep-row-chk:checked")).map(c => c.value);
+  if(applyBulkBoth(ids, $("repBulkComment").value, $("repBulkMila").value)){ $("repBulkComment").value = ""; $("repBulkMila").value = ""; }
+}
+function toggleRepSelectAll(on){ document.querySelectorAll(".rep-row-chk").forEach(c => c.checked = on); }
+// ⏳ Credit baaki — seedha AC popup (sirf jo Credit nahi hue); labourId do to sirf us Labour ke
+function openACPending(labourId){
+  switchTab("dashboard");
+  const l = labourId ? DATA.labours.find(x => x.id === labourId) : null;
+  $("acSearch").value = l ? l.name : "";
+  $("acDate").value = "";
+  $("acOnlyPending").checked = true;
+  acTab(1);
+  renderACList();
+  closeLedgerModal();
+  $("acModalOverlay").classList.remove("hidden");
+}
+
 // Purane data ke liye ek baar: jin Demand par comment tha (= mila maana jata tha) unka Mila amount bhar do
 function migrateV45(){
   if(DATA.migMilaV45) return;

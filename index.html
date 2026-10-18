@@ -379,7 +379,7 @@ nav.tabs .tl{font-size:10.5px;font-weight:700;letter-spacing:.2px}
           <button class="btn btn-orange btn-sm" onclick="openDemandModal(1)">➕ Demand</button>
         </div>
         <div class="row">
-          <button class="btn btn-outline btn-sm" id="dashPendBtn" onclick="openPendingPopup(null)">⏳ Credit baaki</button>
+          <button class="btn btn-outline btn-sm" id="dashPendBtn" onclick="openACPending(null)">⏳ Credit baaki</button>
           <button class="btn btn-green btn-sm" onclick="openBulkDiya()">👥 Bulk Diya</button>
         </div>
         <div class="row mt">
@@ -391,7 +391,6 @@ nav.tabs .tl{font-size:10.5px;font-weight:700;letter-spacing:.2px}
           <button class="btn btn-orange btn-sm" onclick="downloadKhataPDF()">⬇️ Sabka Khata PDF</button>
           <button class="btn btn-sm" style="background:#25D366;color:#fff" onclick="shareKhataPDF()">📲 WhatsApp Share</button>
         </div>
-        <button class="btn btn-blue btn-sm mt" id="btnKhataAc" onclick="openACInKhata()">🏦 AC Credit (popup)</button>
       </div>
 
       <div class="card">
@@ -428,6 +427,19 @@ nav.tabs .tl{font-size:10.5px;font-weight:700;letter-spacing:.2px}
           </label>
         </div>
         <p style="font-size:12px;color:var(--muted);margin-top:6px">ℹ️ <b>Kitna Mila</b> me ✅ dabao (poora hissa) ya amount likho. <b>Comment</b> sirf note hai (jaise: agle hafte dega). Print / PDF me ye sab aata hai.</p>
+        <div class="row mt" style="background:#e8f7ee;padding:10px;border-radius:10px;border:1.5px dashed var(--green-mid);align-items:flex-end">
+          <div class="field grow" style="margin-bottom:0;min-width:150px">
+            <label style="font-size:12.5px;color:var(--green);font-weight:700">💬 Comment (note)</label>
+            <input type="text" id="repBulkComment" placeholder="jaise: agle hafte dega">
+          </div>
+          <div class="field" style="margin-bottom:0;min-width:110px;max-width:130px">
+            <label style="font-size:12.5px;color:var(--green);font-weight:700">💰 Kitna Mila ₹</label>
+            <input type="number" id="repBulkMila" min="0" step="any" placeholder="jaise 600">
+          </div>
+          <button class="btn btn-blue btn-sm" onclick="bulkApplyReport()">✏️ Apply to Selected</button>
+          <button class="btn btn-green btn-sm" onclick="bulkMilaFull('rep-row-chk')">✅ Poora Mila</button>
+          <div style="flex-basis:100%;font-size:11.5px;color:var(--muted)">Neeche table se rows select karein. Jo khana khaali ho use chhua nahi jayega.</div>
+        </div>
         <div class="row mt">
           <button class="btn btn-blue btn-sm" onclick="printReport()">🖨️ Print</button>
           <button class="btn btn-orange btn-sm" onclick="downloadReportPDF()">⬇️ PDF Download</button>
@@ -440,7 +452,7 @@ nav.tabs .tl{font-size:10.5px;font-weight:700;letter-spacing:.2px}
         <div class="summary-grid" id="reportSummary"></div>
         <div class="table-wrap mt">
           <table class="report-table">
-            <thead><tr><th class="nw">#</th><th>Name</th><th>Jobcard No.</th><th class="nw">Kul Divas</th><th class="nw">Pratidin ₹</th><th class="nw">Kul Bhugtan ₹</th><th class="nw">Mate ₹</th><th class="nw">Kitna Mila ₹</th><th class="nw">Baaki ₹</th><th class="nw">Mate Status</th><th class="nw">AC Status</th><th class="nw">Credit</th><th class="c-comment">Comment</th></tr></thead>
+            <thead><tr><th class="nw no-print"><input type="checkbox" onchange="toggleRepSelectAll(this.checked)"></th><th class="nw">#</th><th>Name</th><th>Jobcard No.</th><th class="nw">Kul Divas</th><th class="nw">Pratidin ₹</th><th class="nw">Kul Bhugtan ₹</th><th class="nw">Mate ₹</th><th class="nw">Kitna Mila ₹</th><th class="nw">Baaki ₹</th><th class="nw">Mate Status</th><th class="nw">AC Status</th><th class="nw">Credit</th><th class="c-comment">Comment</th></tr></thead>
             <tbody id="reportTableBody"></tbody>
           </table>
         </div>
@@ -731,6 +743,7 @@ nav.tabs .tl{font-size:10.5px;font-weight:700;letter-spacing:.2px}
         <div class="row">
           <input type="text" id="acSearch" class="grow" placeholder="🔍 Search by Name / Jobcard" oninput="renderACList()">
           <div class="field grow"><label>Date (Demand Date Filter)</label><input type="date" id="acDate" onchange="renderACList()"></div>
+          <label style="font-size:12.5px;white-space:nowrap;font-weight:600"><input type="checkbox" id="acOnlyPending" style="width:auto" onchange="renderACList()"> ⏳ Sirf Credit baaki</label>
           <button class="btn btn-gray btn-sm" onclick="clearACFilter()">All Dates</button>
           <button class="btn btn-gray btn-sm" onclick="manualRefresh('dashboard')">🔄 Refresh</button>
         </div>
@@ -745,19 +758,17 @@ nav.tabs .tl{font-size:10.5px;font-weight:700;letter-spacing:.2px}
           <button class="btn btn-orange btn-sm" onclick="bulkUndoACCredit()">↩️ Bulk Undo</button>
         </div>
         <div class="row mt" style="background:#e8f7ee;padding:10px;border-radius:10px;border:1.5px dashed var(--green-mid);align-items:flex-end">
-          <button class="btn btn-green btn-sm" onclick="bulkMilaFull()">✅ Poora Mila (chune hue)</button>
-          <div class="field grow" style="margin-bottom:0;min-width:130px">
-            <label style="font-size:12.5px;color:var(--green);font-weight:700">Kitna Mila ₹ (chune hue sab ke liye)</label>
+          <div class="field grow" style="margin-bottom:0;min-width:150px">
+            <label style="font-size:12.5px;color:var(--green);font-weight:700">💬 Comment (note)</label>
+            <input type="text" id="acBulkComment" placeholder="jaise: agle hafte dega">
+          </div>
+          <div class="field" style="margin-bottom:0;min-width:110px;max-width:130px">
+            <label style="font-size:12.5px;color:var(--green);font-weight:700">💰 Kitna Mila ₹</label>
             <input type="number" id="acBulkMila" min="0" step="any" placeholder="jaise 600">
           </div>
-          <button class="btn btn-blue btn-sm" onclick="bulkMilaAmount()">✏️ Apply Amount</button>
-        </div>
-        <div class="row mt" style="background:var(--green-light);padding:10px;border-radius:10px;border:1.5px dashed var(--green-mid);align-items:flex-end">
-          <div class="field grow" style="margin-bottom:0;min-width:200px">
-            <label style="font-size:12.5px;color:var(--green);font-weight:700">💬 Bulk Comment — neeche se select karein, yahan likhein (sirf note — hisaab par asar nahi)</label>
-            <input type="text" id="acBulkComment" placeholder="Comment likhein... (jaise: diya)">
-          </div>
-          <button class="btn btn-blue btn-sm" onclick="bulkACComment()">✏️ Apply to Selected</button>
+          <button class="btn btn-blue btn-sm" onclick="bulkApplyAC()">✏️ Apply to Selected</button>
+          <button class="btn btn-green btn-sm" onclick="bulkMilaFull()">✅ Poora Mila</button>
+          <div style="flex-basis:100%;font-size:11.5px;color:var(--muted)">Jo khana khaali ho use chhua nahi jayega — sirf bhara hua lagega.</div>
         </div>
         <div class="table-wrap mt">
           <table>
@@ -867,7 +878,7 @@ nav.tabs .tl{font-size:10.5px;font-weight:700;letter-spacing:.2px}
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   }
 </script>
-<script src="app.js?v=45"></script>
+<script src="app.js?v=46"></script>
 <script>
 /* Agar app.js load hi na ho (404 / internet / purani cache) to Login button "dead" lagta hai —
    user ko saaf message dikhao ki asli problem kya hai */
