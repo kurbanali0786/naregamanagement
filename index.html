@@ -2,7 +2,12 @@
 <html lang="hi">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Labour Card">
+<meta name="format-detection" content="telephone=no">
 <meta name="theme-color" content="#1a5c2e">
 <title>Labour Job Card System</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -287,6 +292,127 @@ nav.tabs .tl{font-size:10.5px;font-weight:700;letter-spacing:.2px}
 .cal-d .cdot{position:absolute;bottom:3px;left:50%;transform:translateX(-50%);font-size:8px;line-height:1}
 .cal-foot{display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:8px;flex-wrap:wrap}
 .cal-legend{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.6}
+
+/* ===== v47 — iPhone + Android + laptop ===== */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{overflow-x:hidden;-webkit-tap-highlight-color:transparent;overscroll-behavior-y:none}
+input[type=checkbox],input[type=radio]{width:auto;min-width:0;padding:0;flex:none;accent-color:var(--green-mid)}
+input[type=checkbox]{width:18px;height:18px}
+.chip-chk{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--green);background:#fff;border:1.5px solid var(--border);border-radius:999px;padding:6px 11px;cursor:pointer;white-space:nowrap;line-height:1.2}
+.chip-chk:has(input:checked){background:var(--green-light);border-color:var(--green-mid)}
+.chip-chk input{margin:0}
+img,svg,video{max-width:100%}
+header.app-header{padding-top:max(14px,env(safe-area-inset-top));padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right))}
+nav.tabs{padding-bottom:env(safe-area-inset-bottom)}
+main{padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right));padding-bottom:calc(92px + env(safe-area-inset-bottom))}
+#toastContainer{bottom:calc(68px + env(safe-area-inset-bottom))}
+@media (hover:none){.sum-card:hover,.btn:hover{transform:none;box-shadow:none;filter:none}}
+
+/* --- phone (iPhone / Android) --- */
+@media (max-width:640px){
+  main{padding-top:10px}
+  .card{padding:12px;margin-bottom:10px;border-radius:14px}
+  .card h3{font-size:15px;margin-bottom:8px}
+  input,select,textarea{font-size:16px;padding:9px 11px;border-radius:9px}   /* 16px: iPhone zoom na kare */
+  .field{margin-bottom:8px}
+  .field label{font-size:12px;margin-bottom:3px}
+  .btn{padding:9px 12px;font-size:13px}
+  .btn-sm{padding:6px 10px;font-size:12px}
+  .row{gap:6px}
+  .summary-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+  .sum-card{padding:7px 3px;border-radius:10px}
+  .sum-card .v{font-size:14px;word-break:break-word}
+  .sum-card .l{font-size:10px;margin-top:1px}
+  .stat-strip .sum-card .v{font-size:14px}
+  table{min-width:480px;font-size:12px}
+  th,td{padding:7px 6px}
+  .chk-item{padding:8px 9px;gap:8px;font-size:13px}
+  .subtabs button{padding:8px 3px;font-size:12px}
+  header.app-header h1{font-size:15px}
+  .user-box{padding:3px 6px;gap:5px}
+  .user-box span{max-width:90px}
+  .hdr-ic{width:32px;height:32px;font-size:15px}
+  /* popup = neeche se khulne wali sheet, poori chaudai */
+  .modal-overlay-lg{padding:0;align-items:flex-end}
+  .modal-lg{max-width:100%!important;width:100%!important;max-height:94vh;max-height:94dvh;border-radius:16px 16px 0 0;padding:14px 12px calc(14px + env(safe-area-inset-bottom))}
+  .modal-lg .close-x{top:8px;right:10px}
+  .cal-box{max-width:100%}
+  #calOverlay{align-items:center;padding:16px}
+}
+
+/* --- laptop / badi screen --- */
+@media (min-width:900px){
+  main{max-width:1180px}
+  nav.tabs{left:50%;right:auto;transform:translateX(-50%);width:min(460px,100%);border:1px solid var(--border);border-bottom:none;border-radius:14px 14px 0 0;box-shadow:0 -4px 18px rgba(15,81,50,.10)}
+  #panel-dashboard.active{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:16px;align-items:start}
+  #panel-dashboard.active>.card{margin-bottom:0}
+  #panel-dashboard.active>.card:nth-of-type(2){grid-column:1;grid-row:1 / span 2}
+  #panel-dashboard.active>.card:nth-of-type(1){grid-column:2;grid-row:1}
+  #panel-dashboard.active>.card:nth-of-type(3){grid-column:2;grid-row:2}
+  .modal-lg{max-height:88vh}
+}
+
+/* ===== v47 — Phone first (iPhone + Android) + Laptop ===== */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{overflow-x:hidden;-webkit-tap-highlight-color:transparent;overscroll-behavior-y:none}
+button,.btn,label,select,input[type=checkbox]{touch-action:manipulation}
+input[type=checkbox],input[type=radio]{width:auto;padding:0;accent-color:var(--green-mid);flex:none}
+label.chip-chk{display:inline-flex;align-items:center;gap:6px;background:#eef4f0;border:1px solid var(--border);border-radius:999px;padding:6px 12px;font-size:12.5px;font-weight:600;color:#33463c;cursor:pointer;margin:0;width:auto;line-height:1.2}
+label.chip-chk input{width:16px;height:16px;margin:0}
+label.chip-chk:has(input:checked){background:var(--green-light);border-color:var(--green-mid);color:var(--green)}
+header.app-header{padding-top:max(12px,env(safe-area-inset-top));padding-left:max(14px,env(safe-area-inset-left));padding-right:max(14px,env(safe-area-inset-right))}
+nav.tabs{padding-bottom:env(safe-area-inset-bottom);padding-left:max(6px,env(safe-area-inset-left));padding-right:max(6px,env(safe-area-inset-right))}
+main{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
+.modal-lg{-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+@media(max-width:600px){
+  /* iPhone: 16px se kam font par Safari zoom kar deta hai */
+  input,select,textarea{font-size:16px;padding:8px 10px;border-radius:9px}
+  .field{margin-bottom:9px}
+  .field label{font-size:12px;margin-bottom:3px}
+  main{padding:10px 8px calc(92px + env(safe-area-inset-bottom))}
+  .card{padding:11px;margin-bottom:10px;border-radius:14px}
+  .card h3{font-size:14.5px;margin-bottom:8px}
+  .btn{padding:9px 12px;font-size:13.5px;min-height:38px}
+  .btn-sm{padding:6px 9px;font-size:12px;min-height:32px}
+  .row{gap:6px}
+  .row .grow{min-width:110px}
+  .summary-grid{grid-template-columns:repeat(3,1fr);gap:6px}
+  .sum-card{padding:7px 3px;border-radius:10px}
+  .sum-card .v{font-size:14.5px}
+  .sum-card .l{font-size:10.5px;margin-top:1px}
+  .chk-item{padding:8px 9px;gap:8px;font-size:13px}
+  th,td{padding:7px 6px}
+  table{font-size:12px;min-width:480px}
+  th{font-size:11.5px}
+  .modal-overlay-lg{padding:0;align-items:flex-end}
+  .modal-lg{max-width:100%!important;width:100%;max-height:94vh;max-height:94dvh;border-radius:18px 18px 0 0;padding:42px 12px calc(14px + env(safe-area-inset-bottom))}
+  .modal-lg .close-x{top:8px;right:10px}
+  .lg-footer{margin:12px -12px calc(-14px - env(safe-area-inset-bottom));bottom:calc(-14px - env(safe-area-inset-bottom))}
+  .subtabs{padding:3px;border-radius:12px;margin-bottom:10px}
+  .subtabs button{padding:8px 4px;font-size:12px}
+  .hero-note{font-size:12px;padding:9px}
+  header.app-header h1{font-size:15px}
+  .user-box{gap:6px}
+  #calOverlay{align-items:center}
+}
+@media(max-width:380px){
+  .summary-grid{gap:5px}
+  .sum-card .v{font-size:13.5px}
+  .btn{padding:8px 10px;font-size:13px}
+  nav.tabs .tl{font-size:10px}
+}
+footer.app-footer{position:static;background:none;backdrop-filter:none;border:none;padding:0 0 calc(86px + env(safe-area-inset-bottom));font-size:11.5px}
+main{padding-bottom:12px!important}
+/* Laptop / badi screen */
+@media(min-width:900px){
+  main{max-width:1100px;padding:20px 16px 100px}
+  nav.tabs{left:50%;right:auto;transform:translateX(-50%);width:420px;bottom:14px;border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow-lg);padding-bottom:0}
+  nav.tabs button{border-radius:14px}
+  .summary-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+  .modal-lg{max-width:760px}
+  .card{padding:18px}
+  .btn:hover{transform:translateY(-1px)}
+}
 </style>
 </head>
 <body>
@@ -384,7 +510,7 @@ nav.tabs .tl{font-size:10.5px;font-weight:700;letter-spacing:.2px}
         </div>
         <div class="row mt">
           <input type="text" id="dashKhataSearch" class="grow" placeholder="🔍 Naam ya Jobcard se dhoondein" oninput="renderDashboardKhata()">
-          <label style="font-size:12.5px;white-space:nowrap"><input type="checkbox" id="dashKhataOnlyPending" onchange="renderDashboardKhata()"> ⏳ Sirf Pending</label>
+          <label class="chip-chk"><input type="checkbox" id="dashKhataOnlyPending" onchange="renderDashboardKhata()"> ⏳ Sirf Pending</label>
         </div>
         <div class="chk-list mt" id="dashKhataList" style="max-height:420px"></div>
         <div class="row mt">
@@ -416,13 +542,13 @@ nav.tabs .tl{font-size:10.5px;font-weight:700;letter-spacing:.2px}
           <button class="btn btn-green" onclick="generateReport()">📊 Generate</button>
         </div>
         <div class="row mt">
-          <label style="font-size:13.5px;display:flex;align-items:center;gap:8px;font-weight:600">
+          <label class="chip-chk">
             <input type="checkbox" id="reportOnlyCredited" onchange="generateReport()"> Sirf AC Credited entries dikhayein
           </label>
-          <label style="font-size:13.5px;display:flex;align-items:center;gap:8px;font-weight:600">
+          <label class="chip-chk">
             <input type="checkbox" id="reportOnlyPending" onchange="generateReport()"> Sirf Pending dikhayein (Mila baaki)
           </label>
-          <label style="font-size:13.5px;display:flex;align-items:center;gap:8px;font-weight:600">
+          <label class="chip-chk">
             <input type="checkbox" id="reportSortBaaki" onchange="generateReport()"> Sabse Zyada Baaki Pehle
           </label>
         </div>
@@ -743,7 +869,7 @@ nav.tabs .tl{font-size:10.5px;font-weight:700;letter-spacing:.2px}
         <div class="row">
           <input type="text" id="acSearch" class="grow" placeholder="🔍 Search by Name / Jobcard" oninput="renderACList()">
           <div class="field grow"><label>Date (Demand Date Filter)</label><input type="date" id="acDate" onchange="renderACList()"></div>
-          <label style="font-size:12.5px;white-space:nowrap;font-weight:600"><input type="checkbox" id="acOnlyPending" style="width:auto" onchange="renderACList()"> ⏳ Sirf Credit baaki</label>
+          <label class="chip-chk"><input type="checkbox" id="acOnlyPending" onchange="renderACList()"> ⏳ Sirf Credit baaki</label>
           <button class="btn btn-gray btn-sm" onclick="clearACFilter()">All Dates</button>
           <button class="btn btn-gray btn-sm" onclick="manualRefresh('dashboard')">🔄 Refresh</button>
         </div>
@@ -751,8 +877,8 @@ nav.tabs .tl{font-size:10.5px;font-weight:700;letter-spacing:.2px}
           <div class="field grow"><label>Credited Date (Credit karte waqt yeh date save hogi)</label><input type="date" id="acCreditDate"></div>
         </div>
         <div class="row mt">
-          <label style="font-size:13.5px;display:flex;align-items:center;gap:8px;font-weight:600">
-            <input type="checkbox" id="acSelectAll" style="width:17px;height:17px" onchange="toggleACSelectAll()"> Select All
+          <label class="chip-chk">
+            <input type="checkbox" id="acSelectAll" onchange="toggleACSelectAll()"> Select All
           </label>
           <button class="btn btn-green btn-sm" onclick="bulkACCredit()">✅ Bulk AC Credit</button>
           <button class="btn btn-orange btn-sm" onclick="bulkUndoACCredit()">↩️ Bulk Undo</button>
@@ -878,7 +1004,7 @@ nav.tabs .tl{font-size:10.5px;font-weight:700;letter-spacing:.2px}
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   }
 </script>
-<script src="app.js?v=46"></script>
+<script src="app.js?v=47"></script>
 <script>
 /* Agar app.js load hi na ho (404 / internet / purani cache) to Login button "dead" lagta hai —
    user ko saaf message dikhao ki asli problem kya hai */
