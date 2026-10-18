@@ -257,6 +257,36 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
   .card,.table-wrap{border:none;box-shadow:none}
   #reportPrintArea button,#labourPrintArea button{display:none!important}
 }
+
+/* ===== v44 redesign ===== */
+.hdr-ic{width:36px;height:36px;border-radius:50%;border:none;background:rgba(255,255,255,.2);color:#fff;font-size:17px;cursor:pointer;display:grid;place-items:center;transition:.15s}
+.hdr-ic:hover{background:rgba(255,255,255,.35);transform:scale(1.06)}
+nav.tabs button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px 7px}
+nav.tabs .ti{font-size:21px;line-height:1}
+nav.tabs .tl{font-size:10.5px;font-weight:700;letter-spacing:.2px}
+.subtabs{display:flex;gap:6px;background:#fff;border:1px solid var(--border);border-radius:14px;padding:5px;margin-bottom:14px;box-shadow:var(--shadow-sm);position:sticky;top:0;z-index:5}
+.subtabs button{flex:1;border:none;background:transparent;padding:10px 6px;border-radius:10px;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;transition:.15s}
+.subtabs button.active{background:var(--green);color:#fff;box-shadow:0 2px 8px rgba(0,100,50,.25)}
+.card{border-radius:16px}
+.card h3{border-bottom:none;padding-bottom:0;margin-bottom:12px}
+/* calendar */
+.cal-input{cursor:pointer;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%23166b43' stroke-width='2'%3E%3Crect x='3' y='5' width='18' height='16' rx='2'/%3E%3Cpath d='M3 10h18M8 3v4M16 3v4'/%3E%3C/svg%3E") no-repeat right 10px center}
+#calOverlay{z-index:9000}
+.cal-box{background:#fff;border-radius:16px;width:100%;max-width:340px;padding:14px;box-shadow:var(--shadow-lg)}
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-weight:700;color:var(--green-dark)}
+.cal-head button{border:none;background:var(--green-light);width:34px;height:34px;border-radius:50%;font-size:16px;cursor:pointer}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}
+.cal-dow{font-size:11px;color:var(--muted);font-weight:700;padding:4px 0}
+.cal-d{position:relative;border:1.5px solid transparent;background:#f7f9f8;border-radius:10px;height:40px;font-size:14px;cursor:pointer;font-weight:600;color:#222;padding:0}
+.cal-d.empty{background:none;cursor:default}
+.cal-d.today{border-color:#9aa9a1}
+.cal-d.has{background:#fff1dc;border-color:#f08a24;color:#8a4a00}
+.cal-d.has.all{background:#dcf5e5;border-color:#1f9d55;color:#0b5a2d}
+.cal-d.mine{box-shadow:0 0 0 2px var(--green) inset;font-weight:800}
+.cal-d.sel{background:var(--green);border-color:var(--green);color:#fff}
+.cal-d .cdot{position:absolute;bottom:3px;left:50%;transform:translateX(-50%);font-size:8px;line-height:1}
+.cal-foot{display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:8px;flex-wrap:wrap}
+.cal-legend{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.6}
 </style>
 </head>
 <body>
@@ -318,7 +348,8 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
   <header class="app-header">
     <h1>🏗️ Labour Job Card System</h1>
     <div class="user-box">
-      <button class="btn btn-gray btn-sm" onclick="openTrashModal()">🗑️ Recycle Bin</button>
+      <button class="hdr-ic" title="Password Set / Update" onclick="openPwModal()">🔑</button>
+      <button class="hdr-ic" title="Recycle Bin" onclick="openTrashModal()">🗑️</button>
       <span id="userDisplay">User</span>
       <button class="btn btn-red btn-sm" onclick="logout()">Logout</button>
     </div>
@@ -327,18 +358,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
   <main>
     <!-- ==== DASHBOARD TAB ==== -->
     <div id="panel-dashboard" class="panel active">
-      <div class="card">
-        <h3>🔑 Password Set Karein</h3>
-        <p style="font-size:12.5px;color:var(--muted);margin-bottom:10px">Aapne Google se Login kiya hai. Yahan ek Password set kar lein to aage kisi bhi doosre phone/computer se seedha <b>Email + Password</b> se bhi Login ho jaayega — Google account share karne ki zaroorat nahi padegi. Data wahi purana milega.</p>
-        <div class="row">
-          <span id="pwEmailDisplay" style="font-size:12.5px;font-weight:600;color:var(--green-dark)"></span>
-        </div>
-        <div class="row">
-          <input type="password" id="pwNewPassword" class="grow" placeholder="Naya Password (kam se kam 6 letters)">
-          <input type="password" id="pwNewPassword2" class="grow" placeholder="Password dobara likhein">
-        </div>
-        <button class="btn btn-green btn-sm" onclick="setAccountPassword()">🔑 Password Set/Update Karein</button>
-      </div>
+      
       <div class="card">
         <h3>🏠 Quick Summary</h3>
         <div class="row mt">
@@ -353,6 +373,11 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
         <h3>📒 Labour Khata (Mate Share Hisaab)</h3>
         <p style="font-size:12.5px;color:var(--muted);margin-bottom:10px">Har Labour ka apna khata — AC Credit hote hi uska <b>Mate Share baaki</b> yahan chadh jata hai. Jitna Labour ne diya (<b style="color:#146c33">🟢 Mile</b>) aur jitna aapne diya (<b style="color:#c0392b">🔴 Diye</b>), sab ka running balance. Naam par tap karke poora khata kholein.</p>
         <div class="summary-grid" id="dashKhataSummary"></div>
+        <div class="row" style="gap:6px;margin-bottom:8px">
+          <button class="btn btn-green btn-sm" onclick="openLabourModal(1)">➕ Labour Jodo</button>
+          <button class="btn btn-blue btn-sm" onclick="downloadLabourCSV()">⬇️ Labour Download</button>
+          <button class="btn btn-orange btn-sm" onclick="openDemandModal(1)">➕ Demand</button>
+        </div>
         <div class="row">
           <button class="btn btn-outline btn-sm" id="dashPendBtn" onclick="openPendingPopup(null)">⏳ Credit baaki</button>
           <button class="btn btn-green btn-sm" onclick="openBulkDiya()">👥 Bulk Diya</button>
@@ -382,146 +407,6 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
       </div>
     </div>
 
-    <!-- ==== LABOUR TAB ==== -->
-    <div id="panel-labour" class="panel">
-      <div class="card">
-        <h3 id="labourFormTitle">➕ Add Labour</h3>
-        <button class="btn btn-outline btn-sm acc-btn" id="btnToggleAddLabour" data-show="➕ Add Labour Dikhayein" data-hide="🙈 Add Labour Chhupayein" onclick="toggleAcc('addLabourBox', this)">➕ Add Labour Dikhayein</button>
-        <div class="collapsible acc-item" id="addLabourBox">
-        <div class="grid3 mt">
-          <div class="field"><label>Jobcard No.</label><input type="text" id="labJobcard" placeholder="RJ-05-001-001"></div>
-          <div class="field"><label>Name</label><input type="text" id="labName" placeholder="Labour name"></div>
-          <div class="field"><label>Aadhar No. (optional, 12 digits)</label><input type="text" id="labAadhar" placeholder="123456789012 (khaali chhod sakte hain)" maxlength="12" inputmode="numeric"></div>
-        </div>
-        <div class="row">
-          <div class="field grow"><label>Status</label>
-            <select id="labStatus"><option value="Active">Active</option><option value="Inactive">Inactive</option><option value="Completed">Completed</option></select>
-          </div>
-          <button class="btn btn-green" id="labSaveBtn" onclick="saveLabour()">💾 Save Labour</button>
-          <button class="btn btn-gray hidden" id="labCancelBtn" onclick="cancelLabourEdit()">Cancel</button>
-        </div>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>📥 Bulk Labour Import (CSV / Excel / PDF)</h3>
-        <button class="btn btn-outline btn-sm acc-btn" id="btnToggleBulkImport" data-show="👁️ Bulk Import Dikhayein" data-hide="🙈 Bulk Import Chhupayein" onclick="toggleAcc('bulkImportBox', this)">👁️ Bulk Import Dikhayein</button>
-        <div class="collapsible acc-item" id="bulkImportBox">
-          <p style="font-size:12.5px;color:var(--muted);margin:10px 0">Format: <b>Jobcard No, Name, Aadhar No, Status</b> — pehli line header honi chahiye. Sirf <b>Jobcard No. aur Name zaroori</b> hain, baaki khaali chhod sakte hain. <b>Excel (.xlsx/.xls), CSV ya PDF</b> teeno chalenge — koi bhi Font (Hindi/English) ho, sab support hai. Agar file me <b>Sr. No. / Serial No.</b> jaisa koi column bhi hai to koi dikkat nahi — wo apne aap ignore ho jaayega, kyunki number app khud lagata hai.</p>
-          <div class="row">
-            <input type="file" id="csvImportFile" accept=".csv,.xlsx,.xls,.pdf" class="grow">
-            <button class="btn btn-green btn-sm" onclick="importLabourFile()">📥 Import Karein</button>
-            <button class="btn btn-gray btn-sm" onclick="downloadSampleCSV()">📄 Sample File Download</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>📋 Mustroll Paste karke Labour Add karein</h3>
-        <button class="btn btn-outline btn-sm acc-btn" id="btnToggleLabourMustroll" data-show="👁️ Mustroll Paste Dikhayein" data-hide="🙈 Mustroll Paste Chhupayein" onclick="toggleAcc('labourMustrollBox', this)">👁️ Mustroll Paste Dikhayein</button>
-        <div class="collapsible acc-item" id="labourMustrollBox">
-          <p style="font-size:12.5px;color:var(--muted);margin:10px 0">NREGA site ki Mustroll table select karke Copy (Ctrl+C) karein, neeche Paste (Ctrl+V) karein. Har row ka Naam + Jobcard Number (<b>'/' ke baad wala part</b>) nikal ke seedha Labour list me add hoga — koi Match nahi hoga. Ek jobcard number <b>max 2 baar</b> (pati-patni) aa sakta hai, 3rd baar aane par wo skip ho jayega.</p>
-          <div class="row">
-            <textarea id="labourMustrollPaste" class="grow" rows="6" placeholder="NREGA Mustroll table yahan Paste karein (Ctrl+V)..."></textarea>
-          </div>
-          <div class="row mt">
-            <button class="btn btn-green btn-sm" onclick="scanMustrollForLabour()">🔍 Match Karein</button>
-          </div>
-          <div id="labourImportPreview"></div>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>👷 List <span id="labourCount" style="font-size:12.5px;color:var(--muted);font-weight:400"></span></h3>
-        <button class="btn btn-outline btn-sm acc-btn" data-show="👷 List Dikhayein" data-hide="🙈 Labour List Chhupayein" onclick="toggleAcc('labourListBox', this)">🙈 Labour List Chhupayein</button>
-        <div class="collapsible acc-item show" id="labourListBox">
-        <div class="row mt">
-          <input type="text" id="labSearch" class="grow" placeholder="🔍 Search by Name / Jobcard / Aadhar" oninput="renderLabours()">
-          <select id="labFilter" onchange="renderLabours()">
-            <option value="">All Status</option>
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
-            <option value="Completed">Completed</option>
-          </select>
-          <button class="btn btn-gray btn-sm" onclick="manualRefresh('labour')">🔄 Refresh</button>
-          <button class="btn btn-blue btn-sm" onclick="printLabourList()">🖨️ Print</button>
-          <button class="btn btn-orange btn-sm" onclick="downloadLabourPDF()">⬇️ PDF</button>
-        </div>
-        <p style="font-size:12px;color:var(--muted);margin-top:6px">ℹ️ Status filter me jo select karoge (Active / Inactive / Completed / All) — wahi Labour list <b>Print / PDF</b> me aayegi.</p>
-        <div class="row mt">
-          <label style="font-size:13.5px;display:flex;align-items:center;gap:8px;font-weight:600">
-            <input type="checkbox" id="labSelectAll" style="width:17px;height:17px" onchange="toggleLabSelectAll()"> Select All
-          </label>
-          <select id="labBulkStatus" style="width:140px;">
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
-            <option value="Completed">Completed</option>
-          </select>
-          <button class="btn btn-blue btn-sm" onclick="updateSelectedLaboursStatus()">✏️ Update Selected (Status)</button>
-          <button class="btn btn-red btn-sm" onclick="deleteSelectedLabours()">🗑️ Delete Selected</button>
-          <button class="btn btn-red btn-sm" onclick="clearAllLabours()">🧹 Clear All Labour</button>
-        </div>
-        <div class="table-wrap mt">
-          <table>
-            <thead><tr><th><input type="checkbox" class="hidden"></th><th style="width:36px;text-align:center">#</th><th>Jobcard No.</th><th>Name</th><th>Aadhar</th><th>Status</th><th>Actions</th></tr></thead>
-            <tbody id="labourTableBody"></tbody>
-          </table>
-        </div>
-        <div id="labourEmpty" class="empty">Koi labour nahi. Upar se labour add karein.</div>
-        </div>
-      </div>
-
-      <!-- Print/PDF ke liye hidden area — JS se banta hai -->
-      <div id="labourPrintArea" style="display:none"></div>
-    </div>
-
-    <!-- ==== PAST TAB (Ek Paste + Manual Demand Select + Demand List) ==== -->
-    <div id="panel-past" class="panel">
-      <div class="card">
-        <h3>⚡ Ek Paste se Sab Kuch — Demand + Payment + AC Credit</h3>
-        <button class="btn btn-outline btn-sm acc-btn" data-show="⚡ Ek Paste Dikhayein" data-hide="🙈 Ek Paste Chhupayein" onclick="toggleAcc('onePasteBox', this)">⚡ Ek Paste Dikhayein</button>
-        <div class="collapsible acc-item" id="onePasteBox">
-        <div class="hero-note">
-          NREGA site ki <b>Mustroll table</b> select karke Copy (Ctrl+C) karein aur neeche Paste (Ctrl+V) kar dein.
-          App khud har row se <b>Naam, Jobcard, Kul Din, Payment (कुल नकद भुगतान), Status aur Credited Date</b> nikaal lega —
-          ek hi click me <b>Demand + Payment</b> ban jayegi, aur jiska <b>Status/Credited Date</b> bhara hoga wo seedha
-          <b>AC Credit</b> bhi ho jayega. Baaki "Pending" rahenge, jinhe baad me 🏦 tab se ek saath Credit kar sakte hain.
-        </div>
-        <div class="row">
-          <div class="field grow"><label>Demand Date (is date ki demand banegi)</label><input type="date" id="onePasteDate"></div>
-          <button class="btn btn-green" onclick="scanOnePaste()">🔍 Paste Parse Karein</button>
-        </div>
-        <div class="row mt">
-          <textarea id="onePasteText" class="grow" rows="8" placeholder="NREGA Mustroll table yahan Paste karein (Ctrl+V)...&#10;&#10;Example row:&#10;1	इनायता / RJ-271600101802038400/2510304	OTHER	जावंध जूनी	P	N	P	12	260	3120	0	0	3120		Processed	20/08/2026"></textarea>
-        </div>
-        <div id="onePastePreview"></div>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>📋 Manual Demand Select</h3>
-        <button class="btn btn-outline btn-sm acc-btn" data-show="👁️ Manual Demand Dikhayein" data-hide="🙈 Manual Demand Chhupayein" onclick="toggleAcc('manualDemandBox', this)">👁️ Manual Demand Dikhayein</button>
-        <div class="collapsible acc-item" id="manualDemandBox">
-          <div class="row mt">
-            <div class="field grow"><label>Date</label><input type="date" id="demandDate" onchange="renderDemandLabourList()"></div>
-          </div>
-          <div class="row mt">
-            <input type="text" id="demandLabourSearch" class="grow" placeholder="🔍 Search Labour by Name / Jobcard" oninput="renderDemandLabourList()">
-            <button class="btn btn-gray btn-sm" onclick="manualRefresh('past')">🔄 Refresh</button>
-          </div>
-          <div class="row mt">
-            <label style="font-size:13.5px;display:flex;align-items:center;gap:8px;font-weight:600">
-              <input type="checkbox" id="demandSelectAll" style="width:17px;height:17px" onchange="toggleDemandSelectAll()"> Select All
-            </label>
-            <span id="demandSelectedCount" style="font-size:12.5px;color:var(--muted)">0 selected</span>
-          </div>
-          <div class="chk-list" id="demandLabourList"></div>
-          <button class="btn btn-green mt" onclick="addDemand()">➕ Add Demand</button>
-        </div>
-      </div>
-
-    </div>
-
     <!-- ==== PAYMENT TAB (removed — Payment ab ⚡Ek Paste se banti hai) ==== -->
     <!-- ==== REPORT TAB ==== -->
     <div id="panel-report" class="panel">
@@ -536,13 +421,13 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
             <input type="checkbox" id="reportOnlyCredited" onchange="generateReport()"> Sirf AC Credited entries dikhayein
           </label>
           <label style="font-size:13.5px;display:flex;align-items:center;gap:8px;font-weight:600">
-            <input type="checkbox" id="reportOnlyPending" onchange="generateReport()"> Sirf Pending dikhayein (Comment khaali)
+            <input type="checkbox" id="reportOnlyPending" onchange="generateReport()"> Sirf Pending dikhayein (Mila baaki)
           </label>
           <label style="font-size:13.5px;display:flex;align-items:center;gap:8px;font-weight:600">
             <input type="checkbox" id="reportSortBaaki" onchange="generateReport()"> Sabse Zyada Baaki Pehle
           </label>
         </div>
-        <p style="font-size:12px;color:var(--muted);margin-top:6px">ℹ️ Yahin se <b>Comment</b> likhein. Labour ne kitna diya wo 📒 Khata me <b>🟢 MILE ₹</b> se likhein. Print / PDF me ye sab aata hai.</p>
+        <p style="font-size:12px;color:var(--muted);margin-top:6px">ℹ️ <b>Kitna Mila</b> me ✅ dabao (poora hissa) ya amount likho. <b>Comment</b> sirf note hai (jaise: agle hafte dega). Print / PDF me ye sab aata hai.</p>
         <div class="row mt">
           <button class="btn btn-blue btn-sm" onclick="printReport()">🖨️ Print</button>
           <button class="btn btn-orange btn-sm" onclick="downloadReportPDF()">⬇️ PDF Download</button>
@@ -555,7 +440,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
         <div class="summary-grid" id="reportSummary"></div>
         <div class="table-wrap mt">
           <table class="report-table">
-            <thead><tr><th class="nw">#</th><th>Name</th><th>Jobcard No.</th><th class="nw">Kul Divas</th><th class="nw">Pratidin ₹</th><th class="nw">Kul Bhugtan ₹</th><th class="nw">Mate ₹</th><th class="nw">Diya ₹</th><th class="nw">Baaki ₹</th><th class="nw">Mate Status</th><th class="nw">AC Status</th><th class="nw">Credit</th><th class="c-comment">Comment</th></tr></thead>
+            <thead><tr><th class="nw">#</th><th>Name</th><th>Jobcard No.</th><th class="nw">Kul Divas</th><th class="nw">Pratidin ₹</th><th class="nw">Kul Bhugtan ₹</th><th class="nw">Mate ₹</th><th class="nw">Kitna Mila ₹</th><th class="nw">Baaki ₹</th><th class="nw">Mate Status</th><th class="nw">AC Status</th><th class="nw">Credit</th><th class="c-comment">Comment</th></tr></thead>
             <tbody id="reportTableBody"></tbody>
           </table>
         </div>
@@ -629,15 +514,178 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
   </main>
 
   <nav class="tabs">
-    <button class="active" data-tab="dashboard" title="Dashboard" onclick="switchTab('dashboard')">🏠</button>
-    <button data-tab="labour" title="Labour" onclick="switchTab('labour')">👷</button>
-    <button data-tab="past" title="Past / Demand" onclick="switchTab('past')">🗂️</button>
-    <button data-tab="report" title="Report" onclick="switchTab('report')">📊</button>
-    <button data-tab="nrega" title="NREGA Form 10" onclick="switchTab('nrega')">📄</button>
+    <button class="active" data-tab="dashboard" title="Dashboard" onclick="switchTab('dashboard')"><span class="ti">🏠</span><span class="tl">Home</span></button>
+    <button data-tab="report" title="Report" onclick="switchTab('report')"><span class="ti">📊</span><span class="tl">Report</span></button>
+    <button data-tab="nrega" title="NREGA Form 10 / 6" onclick="switchTab('nrega')"><span class="ti">📄</span><span class="tl">Form</span></button>
   </nav>
 
   
   <footer class="app-footer">Developed by <b>Kurban Ali</b></footer>
+</div>
+
+<!-- 👷 Labour popup (Khata se khulta hai) -->
+<div id="labourModalOverlay" class="modal-overlay-lg hidden" style="z-index:8050" onclick="if(event.target.id==='labourModalOverlay')closeLabourModal()">
+  <div class="modal-lg" style="max-width:960px;width:100%">
+    <button class="close-x" onclick="closeLabourModal()">✖️</button>
+    <div class="subtabs" style="position:static;margin-top:4px">
+      <button class="active" id="labTabBtn1" onclick="labTab(1)">➕ Labour</button>
+      <button id="labTabBtn2" onclick="labTab(2)">📥 Import / Paste</button>
+      <button id="labTabBtn3" onclick="labTab(3)">📋 List</button>
+    </div>
+    <div id="labPane1">
+      <div class="card">
+        <h3 id="labourFormTitle">➕ Add Labour</h3>
+        <button style="display:none" class="btn btn-outline btn-sm acc-btn" id="btnToggleAddLabour" data-show="➕ Add Labour Dikhayein" data-hide="🙈 Add Labour Chhupayein" onclick="toggleAcc('addLabourBox', this)">➕ Add Labour Dikhayein</button>
+        <div class="collapsible acc-item show" id="addLabourBox">
+        <div class="grid3 mt">
+          <div class="field"><label>Jobcard No.</label><input type="text" id="labJobcard" placeholder="RJ-05-001-001"></div>
+          <div class="field"><label>Name</label><input type="text" id="labName" placeholder="Labour name"></div>
+          <div class="field"><label>Aadhar No. (optional, 12 digits)</label><input type="text" id="labAadhar" placeholder="123456789012 (khaali chhod sakte hain)" maxlength="12" inputmode="numeric"></div>
+        </div>
+        <div class="row">
+          <div class="field grow"><label>Status</label>
+            <select id="labStatus"><option value="Active">Active</option><option value="Inactive">Inactive</option><option value="Completed">Completed</option></select>
+          </div>
+          <button class="btn btn-green" id="labSaveBtn" onclick="saveLabour()">💾 Save Labour</button>
+          <button class="btn btn-gray hidden" id="labCancelBtn" onclick="cancelLabourEdit()">Cancel</button>
+        </div>
+        </div>
+      </div>
+
+      
+
+      
+
+
+    </div>
+    <div id="labPane2" class="hidden">
+        
+<div class="card">
+        <h3>📥 Bulk Labour Import (CSV / Excel / PDF)</h3>
+        <div class="collapsible acc-item show" id="bulkImportBox">
+          <p style="font-size:12.5px;color:var(--muted);margin:10px 0">Format: <b>Jobcard No, Name, Aadhar No, Status</b> — pehli line header honi chahiye. Sirf <b>Jobcard No. aur Name zaroori</b> hain, baaki khaali chhod sakte hain. <b>Excel (.xlsx/.xls), CSV ya PDF</b> teeno chalenge — koi bhi Font (Hindi/English) ho, sab support hai. Agar file me <b>Sr. No. / Serial No.</b> jaisa koi column bhi hai to koi dikkat nahi — wo apne aap ignore ho jaayega, kyunki number app khud lagata hai.</p>
+          <div class="row">
+            <input type="file" id="csvImportFile" accept=".csv,.xlsx,.xls,.pdf" class="grow">
+            <button class="btn btn-green btn-sm" onclick="importLabourFile()">📥 Import Karein</button>
+            <button class="btn btn-gray btn-sm" onclick="downloadSampleCSV()">📄 Sample File Download</button>
+          </div>
+        </div>
+      </div>
+<div class="card">
+        <h3>📋 Mustroll Paste karke Labour Add karein</h3>
+        <div class="collapsible acc-item show" id="labourMustrollBox">
+          <p style="font-size:12.5px;color:var(--muted);margin:10px 0">NREGA site ki Mustroll table select karke Copy (Ctrl+C) karein, neeche Paste (Ctrl+V) karein. Har row ka Naam + Jobcard Number (<b>'/' ke baad wala part</b>) nikal ke seedha Labour list me add hoga — koi Match nahi hoga. Ek jobcard number <b>max 2 baar</b> (pati-patni) aa sakta hai, 3rd baar aane par wo skip ho jayega.</p>
+          <div class="row">
+            <textarea id="labourMustrollPaste" class="grow" rows="6" placeholder="NREGA Mustroll table yahan Paste karein (Ctrl+V)..."></textarea>
+          </div>
+          <div class="row mt">
+            <button class="btn btn-green btn-sm" onclick="scanMustrollForLabour()">🔍 Match Karein</button>
+          </div>
+          <div id="labourImportPreview"></div>
+        </div>
+      </div>
+      </div>
+
+    <div id="labPane3" class="hidden">
+      <div class="card">
+        <h3>👷 List <span id="labourCount" style="font-size:12.5px;color:var(--muted);font-weight:400"></span></h3>
+        <button class="btn btn-outline btn-sm acc-btn" data-show="👷 List Dikhayein" data-hide="🙈 Labour List Chhupayein" onclick="toggleAcc('labourListBox', this)">🙈 Labour List Chhupayein</button>
+        <div class="collapsible acc-item show" id="labourListBox">
+        <div class="row mt">
+          <input type="text" id="labSearch" class="grow" placeholder="🔍 Search by Name / Jobcard / Aadhar" oninput="renderLabours()">
+          <select id="labFilter" onchange="renderLabours()">
+            <option value="">All Status</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+            <option value="Completed">Completed</option>
+          </select>
+          <button class="btn btn-gray btn-sm" onclick="manualRefresh('labour')">🔄 Refresh</button>
+          <button class="btn btn-blue btn-sm" onclick="printLabourList()">🖨️ Print</button>
+          <button class="btn btn-orange btn-sm" onclick="downloadLabourPDF()">⬇️ PDF</button>
+        </div>
+        <p style="font-size:12px;color:var(--muted);margin-top:6px">ℹ️ Status filter me jo select karoge (Active / Inactive / Completed / All) — wahi Labour list <b>Print / PDF</b> me aayegi.</p>
+        <div class="row mt">
+          <label style="font-size:13.5px;display:flex;align-items:center;gap:8px;font-weight:600">
+            <input type="checkbox" id="labSelectAll" style="width:17px;height:17px" onchange="toggleLabSelectAll()"> Select All
+          </label>
+          <select id="labBulkStatus" style="width:140px;">
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+            <option value="Completed">Completed</option>
+          </select>
+          <button class="btn btn-blue btn-sm" onclick="updateSelectedLaboursStatus()">✏️ Update Selected (Status)</button>
+          <button class="btn btn-red btn-sm" onclick="deleteSelectedLabours()">🗑️ Delete Selected</button>
+          <button class="btn btn-red btn-sm" onclick="clearAllLabours()">🧹 Clear All Labour</button>
+        </div>
+        <div class="table-wrap mt">
+          <table>
+            <thead><tr><th><input type="checkbox" class="hidden"></th><th style="width:36px;text-align:center">#</th><th>Jobcard No.</th><th>Name</th><th>Aadhar</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody id="labourTableBody"></tbody>
+          </table>
+        </div>
+        <div id="labourEmpty" class="empty">Koi labour nahi. Upar se labour add karein.</div>
+        </div>
+      </div>
+
+
+      <div id="labourPrintArea" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ➕ Demand popup (Khata se khulta hai) -->
+<div id="demandModalOverlay" class="modal-overlay-lg hidden" style="z-index:8050" onclick="if(event.target.id==='demandModalOverlay')closeDemandModal()">
+  <div class="modal-lg" style="max-width:960px;width:100%">
+    <button class="close-x" onclick="closeDemandModal()">✖️</button>
+    <div class="subtabs" style="position:static;margin-top:4px">
+      <button class="active" id="demTabBtn1" onclick="demTab(1)">⚡ Ek Paste (Past)</button>
+      <button id="demTabBtn2" onclick="demTab(2)">✍️ Manual Demand</button>
+    </div>
+<div id="demPane1">
+<div class="card">
+        <h3>⚡ Ek Paste se Sab Kuch — Demand + Payment + AC Credit</h3>
+        <div class="collapsible acc-item show" id="onePasteBox">
+        <div class="hero-note">
+          NREGA site ki <b>Mustroll table</b> select karke Copy (Ctrl+C) karein aur neeche Paste (Ctrl+V) kar dein.
+          App khud har row se <b>Naam, Jobcard, Kul Din, Payment (कुल नकद भुगतान), Status aur Credited Date</b> nikaal lega —
+          ek hi click me <b>Demand + Payment</b> ban jayegi, aur jiska <b>Status/Credited Date</b> bhara hoga wo seedha
+          <b>AC Credit</b> bhi ho jayega. Baaki "Pending" rahenge, jinhe baad me 🏦 tab se ek saath Credit kar sakte hain.
+        </div>
+        <div class="row">
+          <div class="field grow"><label>Demand Date (is date ki demand banegi)</label><input type="date" id="onePasteDate"></div>
+          <button class="btn btn-green" onclick="scanOnePaste()">🔍 Paste Parse Karein</button>
+        </div>
+        <div class="row mt">
+          <textarea id="onePasteText" class="grow" rows="8" placeholder="NREGA Mustroll table yahan Paste karein (Ctrl+V)...&#10;&#10;Example row:&#10;1	इनायता / RJ-271600101802038400/2510304	OTHER	जावंध जूनी	P	N	P	12	260	3120	0	0	3120		Processed	20/08/2026"></textarea>
+        </div>
+        <div id="onePastePreview"></div>
+        </div>
+      </div>
+      </div>
+      <div id="demPane2" class="hidden">
+<div class="card">
+        <h3>📋 Manual Demand Select</h3>
+        <div class="collapsible acc-item show" id="manualDemandBox">
+          <div class="row mt">
+            <div class="field grow"><label>Date</label><input type="date" id="demandDate" onchange="renderDemandLabourList()"></div>
+          </div>
+          <div class="row mt">
+            <input type="text" id="demandLabourSearch" class="grow" placeholder="🔍 Search Labour by Name / Jobcard" oninput="renderDemandLabourList()">
+            <button class="btn btn-gray btn-sm" onclick="manualRefresh('past')">🔄 Refresh</button>
+          </div>
+          <div class="row mt">
+            <label style="font-size:13.5px;display:flex;align-items:center;gap:8px;font-weight:600">
+              <input type="checkbox" id="demandSelectAll" style="width:17px;height:17px" onchange="toggleDemandSelectAll()"> Select All
+            </label>
+            <span id="demandSelectedCount" style="font-size:12.5px;color:var(--muted)">0 selected</span>
+          </div>
+          <div class="chk-list" id="demandLabourList"></div>
+          <button class="btn btn-green mt" onclick="addDemand()">➕ Add Demand</button>
+        </div>
+      </div>
+      </div>
+      
+  </div>
 </div>
 
 <!-- ============ LABOUR KHATA / LEDGER (Khatabook jaisa) ============ -->
@@ -651,9 +699,9 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
 <div id="bulkModalOverlay" class="modal-overlay-lg hidden" style="z-index:8100" onclick="if(event.target.id==='bulkModalOverlay')closeBulkDiya()">
   <div class="modal-lg" style="max-width:520px">
     <h3 style="margin-bottom:4px">👥 Bulk Diya</h3>
-    <p style="font-size:12px;color:var(--muted);margin:0 0 8px">Jin Labour ne diya unhe select karein, Comment likhein, Save. Sabke Khata me apne-aap Mila (credit) ban jayega.</p>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 8px">Jin Labour ne poora diya unhe select karein, Save. Sabke Khata me poora hissa Mila (credit) ban jayega. Comment likhna zaroori nahi.</p>
     <div class="field"><label>Payment date</label><select id="bulkPayDate" onchange="renderBulkDiya()"></select></div>
-    <div class="field"><label>Comment (Report me bhi chadhega)</label><input type="text" id="bulkNote" placeholder="jaise: diya"></div>
+    <div class="field"><label>Comment (optional note)</label><input type="text" id="bulkNote" placeholder="jaise: diya"></div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin:6px 0">
       <label style="font-size:13px"><input type="checkbox" id="bulkAll" style="width:auto;display:inline" onchange="toggleBulkAll(this.checked)"> Sabhi select karein</label>
       <span id="bulkCnt" style="font-size:12px;color:var(--muted)"></span>
@@ -696,20 +744,28 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
           <button class="btn btn-green btn-sm" onclick="bulkACCredit()">✅ Bulk AC Credit</button>
           <button class="btn btn-orange btn-sm" onclick="bulkUndoACCredit()">↩️ Bulk Undo</button>
         </div>
+        <div class="row mt" style="background:#e8f7ee;padding:10px;border-radius:10px;border:1.5px dashed var(--green-mid);align-items:flex-end">
+          <button class="btn btn-green btn-sm" onclick="bulkMilaFull()">✅ Poora Mila (chune hue)</button>
+          <div class="field grow" style="margin-bottom:0;min-width:130px">
+            <label style="font-size:12.5px;color:var(--green);font-weight:700">Kitna Mila ₹ (chune hue sab ke liye)</label>
+            <input type="number" id="acBulkMila" min="0" step="any" placeholder="jaise 600">
+          </div>
+          <button class="btn btn-blue btn-sm" onclick="bulkMilaAmount()">✏️ Apply Amount</button>
+        </div>
         <div class="row mt" style="background:var(--green-light);padding:10px;border-radius:10px;border:1.5px dashed var(--green-mid);align-items:flex-end">
           <div class="field grow" style="margin-bottom:0;min-width:200px">
-            <label style="font-size:12.5px;color:var(--green);font-weight:700">💬 Bulk Comment — neeche se select karein, yahan likhein (comment = Mila)</label>
+            <label style="font-size:12.5px;color:var(--green);font-weight:700">💬 Bulk Comment — neeche se select karein, yahan likhein (sirf note — hisaab par asar nahi)</label>
             <input type="text" id="acBulkComment" placeholder="Comment likhein... (jaise: diya)">
           </div>
           <button class="btn btn-blue btn-sm" onclick="bulkACComment()">✏️ Apply to Selected</button>
         </div>
         <div class="table-wrap mt">
           <table>
-            <thead><tr><th><input type="checkbox" class="hidden"></th><th style="width:36px;text-align:center">#</th><th>Date</th><th>Jobcard</th><th>Name</th><th>Kul ₹</th><th>Mate Share ₹</th><th>Mate Status</th><th>Status / Credited Date</th><th>Comment</th><th>Action</th></tr></thead>
+            <thead><tr><th><input type="checkbox" class="hidden"></th><th style="width:36px;text-align:center">#</th><th>Date</th><th>Jobcard</th><th>Name</th><th>Kul ₹</th><th>Mate Share ₹</th><th>Kitna Mila ₹</th><th>Mate Status</th><th>Status / Credited Date</th><th>Comment</th><th>Action</th></tr></thead>
             <tbody id="acTableBody"></tbody>
           </table>
         </div>
-        <p style="font-size:12px;color:var(--muted);margin-top:8px">Labour ne kitna diya wo 📒 Khata me <b>🟢 MILE ₹</b> se likhein. <b>Mate Status</b> Comment se aata hai: khaali = ⏳ Pending, kuch likha = ✅ Mila.</p>
+        <p style="font-size:12px;color:var(--muted);margin-top:8px">Labour ne kitna diya wo 📒 Khata me <b>🟢 MILE ₹</b> se likhein. <b>Kitna Mila</b> me ✅ dabao to poora hissa mila; kam mila ho to amount likho. Comment sirf note hai.</p>
         <div id="acEmpty" class="empty">Koi payment nahi.</div>
         </div>
         <div id="acPane2" class="hidden">
@@ -738,6 +794,29 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
   </div>
 </div>
 
+<!-- 🔑 Password popup (header ke 🔑 icon se khulta hai) -->
+<div id="pwModalOverlay" class="modal-overlay-lg hidden" onclick="if(event.target.id==='pwModalOverlay')closePwModal()">
+  <div class="modal-lg">
+    <button class="close-x" onclick="closePwModal()">✖️</button>
+    <h3 style="margin-bottom:10px;color:var(--green)">🔑 Password Set Karein</h3>
+    <p style="font-size:12.5px;color:var(--muted);margin-bottom:10px">Aapne Google se Login kiya hai. Yahan ek Password set kar lein to aage kisi bhi doosre phone/computer se seedha <b>Email + Password</b> se bhi Login ho jaayega — Google account share karne ki zaroorat nahi padegi. Data wahi purana milega.</p>
+        <div class="row">
+          <span id="pwEmailDisplay" style="font-size:12.5px;font-weight:600;color:var(--green-dark)"></span>
+        </div>
+        <div class="row">
+          <input type="password" id="pwNewPassword" class="grow" placeholder="Naya Password (kam se kam 6 letters)">
+          <input type="password" id="pwNewPassword2" class="grow" placeholder="Password dobara likhein">
+        </div>
+        <button class="btn btn-green btn-sm" onclick="setAccountPassword()">🔑 Password Set/Update Karein</button>
+      
+  </div>
+</div>
+
+
+<!-- 📅 Calendar popup (Demand wali dates highlight) -->
+<div id="calOverlay" class="modal-overlay-lg hidden" onclick="if(event.target.id==='calOverlay')closeCal()">
+  <div class="cal-box" id="calBox"></div>
+</div>
 <div id="ledgerModalOverlay" class="modal-overlay-lg hidden">
   <div class="modal-lg">
     <button class="close-x" onclick="closeLedgerModal()">✖️</button>
@@ -788,7 +867,7 @@ footer.app-footer{position:fixed;bottom:50px;left:0;right:0;background:rgba(255,
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   }
 </script>
-<script src="app.js?v=43"></script>
+<script src="app.js?v=45"></script>
 <script>
 /* Agar app.js load hi na ho (404 / internet / purani cache) to Login button "dead" lagta hai —
    user ko saaf message dikhao ki asli problem kya hai */

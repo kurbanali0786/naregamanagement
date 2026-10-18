@@ -474,6 +474,7 @@ function repairMateShare(){
 
 function renderAll(){
   repairMateShare();
+  migrateV45();
   renderDashboard();
   renderDashboardKhata();
   renderLabourProfileList();
@@ -510,23 +511,27 @@ function getPaidMap(){
   return m;
 }
 function getPaymentPaid(p, paidMap){
+  return round2(getPaymentOtherPaid(p, paidMap) + getPaymentMila(p));
+}
+// v45: "Kitna Mila" — Demand par saved amount (Report / AC popup / Bulk se)
+function getPaymentMila(p){
+  const d = DATA.demands.find(x => x.date === p.date && x.labourId === p.labourId);
+  return d ? (Number(d.mila) || 0) : 0;
+}
+// Mila ke alawa jo mila (purana Diya + Khata ki payment-wise entries)
+function getPaymentOtherPaid(p, paidMap){
   const ac = DATA.acCredits.find(a => a.date === p.date && a.labourId === p.labourId);
-  const legacy = ac ? (Number(ac.diya) || 0) : 0;
-  return round2(legacy + ((paidMap || getPaidMap())[p.id] || 0));
+  return round2((ac ? (Number(ac.diya) || 0) : 0) + ((paidMap || getPaidMap())[p.id] || 0));
 }
 function getPaymentLeft(p, paidMap){
   return Math.max(0, round2((Number(p.amount) || 0) * 0.5 - getPaymentPaid(p, paidMap)));
 }
 // Mate Status: poora mil gaya ya Comment likha = ✅ Mila, baaki sab ⏳ Pending
 function paymentMateStatus(p, paidMap){
-  if(getPaymentLeft(p, paidMap) <= 0) return "mila";
-  const d = DATA.demands.find(x => x.date === p.date && x.labourId === p.labourId);
-  return demandCommentStatus(d);
+  return getPaymentLeft(p, paidMap) <= 0 ? "mila" : "pending";
 }
 
-function demandCommentStatus(d){
-  return (d && d.comment && String(d.comment).trim().length) ? "mila" : "pending";
-}
+function demandCommentStatus(d){ return "pending"; } // v45: comment ab sirf note hai
 
 // Saare Labour ka khata ek hi baar me (onlyLabourId do to sirf us Labour ka)
 function computeLedgers(onlyLabourId){
@@ -553,12 +558,12 @@ function computeLedgers(onlyLabourId){
     const left = Math.max(0, round2(mate - paid));
     add(p.labourId, { kind: "due", date: dueDate, amount: mate, order: 0, paymentId: p.id, paid, left,
       comment: "Payment ₹" + (Number(p.amount) || 0) + " (" + fmtDate(p.date) + ")",
-      status: left <= 0 ? "mila" : demandCommentStatus(dem) });
-    // Comment likha hai = paisa mil gaya -> baaki hissa apne-aap "Mila" (credit) ban jata hai
-    if(dem && dem.comment && String(dem.comment).trim()){
-      const autoAmt = Math.max(0, round2(mate - paid));
-      if(autoAmt > 0) add(p.labourId, { kind: "mile", auto: true, paymentId: p.id, date: dueDate, amount: autoAmt, order: 1,
-        comment: "Comment: " + String(dem.comment).trim() });
+      status: left <= 0 ? "mila" : "pending" });
+    // v45: "Kitna Mila" (Demand par saved) -> Khata me Mila (credit) entry. Comment sirf note hai.
+    const milaAmt = dem ? Math.min(Number(dem.mila) || 0, mate) : 0;
+    if(milaAmt > 0){
+      add(p.labourId, { kind: "mile", auto: true, paymentId: p.id, date: dem.milaDate || dueDate, amount: round2(milaAmt), order: 1,
+        comment: dem.comment && String(dem.comment).trim() ? String(dem.comment).trim() : "" });
     }
     const diya = Number(ac.diya) || 0;
     if(diya > 0){
@@ -706,6 +711,10 @@ function renderKhataListInto(elId, term){
           <div class="badge ${cls}" style="font-size:13px">${balTxt}</div>
           <div style="font-size:10.5px;color:var(--muted);margin-top:2px">${sub}</div>
         </div>
+        <div style="display:flex;flex-direction:column;gap:3px;margin-left:6px" onclick="event.stopPropagation()">
+          <button class="btn btn-gray btn-sm" style="padding:2px 7px" title="Edit Labour" onclick="editLabourFromKhata('${l.id}')">✏️</button>
+          <button class="btn btn-red btn-sm" style="padding:2px 7px" title="Delete Labour" onclick="deleteLabour('${l.id}')">🗑️</button>
+        </div>
       </div>
     `;
   }).join("");
@@ -795,6 +804,11 @@ function findLedgerEditTarget(){
     const e = toArray(DATA.ledger).find(x => x.id === ledgerEditKey.slice(2));
     return e ? { kind: "ledger", e } : null;
   }
+  if(ledgerEditKey.startsWith("M:")){
+    const pm = DATA.payments.find(x => x.id === ledgerEditKey.slice(2));
+    const dm = pm ? DATA.demands.find(x => x.date === pm.date && x.labourId === pm.labourId) : null;
+    return dm ? { kind: "mila", p: pm, d: dm } : null;
+  }
   const p = DATA.payments.find(x => x.id === ledgerEditKey.slice(2));
   const ac = p ? DATA.acCredits.find(a => a.date === p.date && a.labourId === p.labourId) : null;
   return ac ? { kind: "legacy", p, ac } : null;
@@ -817,6 +831,10 @@ function saveLedgerEdit(){
       }
     }
     e.amount = amt; e.date = date; e.comment = ($("ledgerEditNote").value || "").trim();
+  } else if(t.kind === "mila"){
+    const mate = (Number(t.p.amount) || 0) * 0.5;
+    if(amt + getPaymentOtherPaid(t.p) > mate + 0.001){ toast("Itna nahi — is payment ka hissa sirf ₹" + mate + " hai", "error"); return; }
+    t.d.mila = amt; t.d.milaDate = date;
   } else {
     const mate = (Number(t.p.amount) || 0) * 0.5;
     const pm = getPaidMap();
@@ -835,6 +853,7 @@ function deleteLedgerEdit(){
   if(!t) return;
   showConfirm("Ye Khata entry delete karni hai?", () => {
     if(t.kind === "ledger") DATA.ledger = toArray(DATA.ledger).filter(e => e.id !== t.e.id);
+    else if(t.kind === "mila"){ t.d.mila = 0; t.d.milaDate = ""; }
     else { t.ac.diya = 0; t.ac.diyaDate = ""; }
     persist();
     ledgerEditKey = null;
@@ -876,8 +895,8 @@ function renderLedgerModal(){
   let editHtml = "";
   const et = ledgerEditKey ? findLedgerEditTarget() : null;
   if(et){
-    const amt = et.kind === "ledger" ? et.e.amount : et.ac.diya;
-    const dt = et.kind === "ledger" ? et.e.date : (et.ac.diyaDate || todayISO());
+    const amt = et.kind === "ledger" ? et.e.amount : (et.kind === "mila" ? et.d.mila : et.ac.diya);
+    const dt = et.kind === "ledger" ? et.e.date : (et.kind === "mila" ? (et.d.milaDate || todayISO()) : (et.ac.diyaDate || todayISO()));
     const nt = et.kind === "ledger" ? (et.e.comment || "") : "";
     editHtml = `
     <div class="lg-form mile">
@@ -914,7 +933,7 @@ function renderLedgerModal(){
     <div class="lg-cols"><span>ENTRIES</span><span>BAAKI JUDA</span><span>MILA</span></div>
     <div id="ledgerRows">
       ${rows.length ? rows.map(r => {
-        const editKey = r.manual ? "L:" + r.id : (r.legacy ? "A:" + r.paymentId : "");
+        const editKey = r.manual ? "L:" + r.id : (r.legacy ? "A:" + r.paymentId : (r.auto ? "M:" + r.paymentId : ""));
         const tag = "";
         const clickAttr = editKey ? `onclick="openLedgerEdit('${editKey}')" style="cursor:pointer" title="Badalne ke liye tap karein"` : "";
         const label = r.kind === "adv" ? "Advance" : (r.kind === "mile" ? "Mila" : "");
@@ -994,7 +1013,7 @@ function getBulkEligible(){
   return DATA.payments.filter(p => {
     if(!isPaymentCredited(p) || (f && p.date !== f)) return false;
     const d = DATA.demands.find(x => x.date === p.date && x.labourId === p.labourId);
-    return d && !(d.comment && String(d.comment).trim());
+    return d && getPaymentLeft(p) > 0;
   }).sort((a, b) => String(a.date).localeCompare(String(b.date)) || nm(a.labourId).localeCompare(nm(b.labourId)));
 }
 function renderBulkDiya(){
@@ -1017,14 +1036,16 @@ function toggleBulkSel(id, on){ bulkSel[id] = on; renderBulkDiya(); }
 function toggleBulkAll(on){ getBulkEligible().forEach(p => { bulkSel[p.id] = on; }); renderBulkDiya(); }
 // Save: chune hue sabhi payments ke Demand par Comment likh deta hai -> Khata me apne-aap "Mila" (credit) ban jata hai
 function saveBulkDiya(){
-  const note = ($("bulkNote").value || "").trim() || "diya";
+  const note = ($("bulkNote").value || "").trim();
   let c = 0, tot = 0;
   getBulkEligible().forEach(p => {
     if(!bulkSel[p.id]) return;
     const dem = DATA.demands.find(d => d.date === p.date && d.labourId === p.labourId);
     if(!dem) return;
-    dem.comment = note;
-    c++; tot += (Number(p.amount) || 0) * 0.5;
+    const left = getPaymentLeft(p);
+    dem.mila = round2((Number(dem.mila) || 0) + left); dem.milaDate = todayISO();
+    if(note) dem.comment = note;
+    c++; tot += left;
   });
   if(!c){ toast("Pehle Labour select karein", "error"); return; }
   persist();
@@ -1130,7 +1151,7 @@ function shareKhataPDF(){ downloadKhataPDF("share"); }
 /* ---------------------------------------------------------------
    TABS
 --------------------------------------------------------------- */
-const TAB_ORDER = ["dashboard", "labour", "past", "report", "nrega"];
+const TAB_ORDER = ["dashboard", "report", "nrega"];
 
 // AC Credit ab Dashboard ke 📒 Khata ke andar hai — purane links yahin kholte hain
 function openACInKhata(){
@@ -1145,6 +1166,8 @@ function closeACModal(){
 
 function switchTab(name){
   if(name === "accredit"){ openACInKhata(); return; }
+  if(name === "labour"){ switchTab("dashboard"); openLabourModal(1); return; }
+  if(name === "past"){ switchTab("dashboard"); openDemandModal(1); return; }
   document.querySelectorAll("nav.tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
   document.querySelectorAll("main .panel").forEach(p => p.classList.remove("active"));
   $("panel-" + name).classList.add("active");
@@ -1188,7 +1211,7 @@ setupSwipeNav();
 // Har tab ka data dobara render karo — manual "Refresh" button aur tab-switch dono isi se chalte hain
 function refreshTab(name){
   if(name === "dashboard"){ renderDashboard(); renderDashboardKhata(); renderLabourProfileList(); renderACList(); }
-  if(name === "labour") renderLabours();
+  if(name === "labour"){ renderLabours(); renderDashboardKhata(); }
   if(name === "past"){
     if($("onePasteDate") && !$("onePasteDate").value) $("onePasteDate").value = todayISO();
     if($("demandDate") && !$("demandDate").value) $("demandDate").value = todayISO();
@@ -3380,6 +3403,9 @@ function renderACList(){
         <td>${escapeHtml(l.name || "—")}</td>
         <td>₹${p.amount}</td>
         <td>₹${mate.toFixed(2)}</td>
+        <td style="min-width:140px">${credited && dem
+          ? `<div style="display:flex;gap:3px;align-items:center"><input type="number" min="0" step="any" id="mila-${p.id}" value="${getPaymentMila(p) || ""}" placeholder="${mate.toFixed(0)}" style="width:72px;font-size:12px;padding:4px 5px" onchange="setMilaFromInput('${p.id}')"><button class="btn btn-green btn-sm" style="padding:3px 7px" title="Poora Mila" onclick="tickMila('${p.id}')">✅</button></div>${getPaymentLeft(p) > 0 ? `<div style="font-size:11px;color:#c0392b">baaki ₹${getPaymentLeft(p).toFixed(2)}</div>` : ""}`
+          : `<span style="color:var(--muted);font-size:12px">—</span>`}</td>
         <td>${credited
           ? (mStatus === "mila" ? `<span class="badge credited">✅ Mila</span>` : `<span class="badge pending">⏳ Pending</span>`)
           : `<span style="color:var(--muted);font-size:12px">—</span>`}</td>
@@ -3631,7 +3657,7 @@ function generateReport(){
         <td class="nw">${p ? "₹" + p.amount : "—"}</td>
         <td class="nw">${p ? "₹" + r.mate.toFixed(2) : "—"}</td>
         <td class="nw">${r.credited && p
-          ? (r.diya ? "₹" + r.diya : "—")
+          ? `<div style="display:flex;gap:3px;align-items:center"><input type="number" min="0" step="any" id="rmila-${p.id}" value="${getPaymentMila(p) || ""}" placeholder="${r.mate.toFixed(0)}" style="width:70px;font-size:12px;padding:4px 5px" onchange="setMilaFromInput('${p.id}', 'rmila-')"><button class="btn btn-green btn-sm" style="padding:3px 7px" title="Poora Mila" onclick="tickMila('${p.id}')">✅</button></div>${r.diya && r.diya !== getPaymentMila(p) ? `<div style="font-size:11px;color:var(--muted)">kul ₹${r.diya}</div>` : ""}`
           : "—"}</td>
         <td class="nw" style="font-weight:700;color:${r.baaki > 0 ? "#c0392b" : "#146c33"}">${r.credited ? (r.baaki > 0 ? "₹" + r.baaki.toFixed(2) : "✅") : "—"}</td>
         <td class="nw">${r.mateStatus === "mila" ? `<span class="badge credited">✅ Mila</span>` : (r.mateStatus === "pending" ? `<span class="badge pending">⏳ Pending</span>` : "—")}</td>
@@ -4281,3 +4307,209 @@ window.addEventListener("DOMContentLoaded", () => {
     });
   }
 });
+
+/* ===============================================================
+   v44 — Entry tab sub-tabs, Password popup, Calendar (Demand dates highlight)
+================================================================ */
+// ---- v45: Khata ke andar Labour / Demand popup ----
+function openLabourModal(n){ $("labourModalOverlay").classList.remove("hidden"); labTab(n || 1); }
+function closeLabourModal(){ $("labourModalOverlay").classList.add("hidden"); renderAll(); }
+function labTab(n){
+  [1, 2, 3].forEach(i => {
+    const p = $("labPane" + i), b = $("labTabBtn" + i);
+    if(p) p.classList.toggle("hidden", i !== n);
+    if(b) b.classList.toggle("active", i === n);
+  });
+  if(n === 3) renderLabours();
+}
+function editLabourFromKhata(id){ openLabourModal(1); editLabour(id); }
+function openDemandModal(n){
+  $("demandModalOverlay").classList.remove("hidden");
+  if($("onePasteDate") && !$("onePasteDate").value) $("onePasteDate").value = todayISO();
+  if($("demandDate") && !$("demandDate").value) $("demandDate").value = todayISO();
+  demTab(n || 1);
+}
+function closeDemandModal(){ $("demandModalOverlay").classList.add("hidden"); renderAll(); }
+function demTab(n){
+  [1, 2].forEach(i => {
+    const p = $("demPane" + i), b = $("demTabBtn" + i);
+    if(p) p.classList.toggle("hidden", i !== n);
+    if(b) b.classList.toggle("active", i === n);
+  });
+  if(n === 2) renderDemandLabourList();
+}
+// Saare Labour ki list file me (Excel me khulti hai): Naam, Jobcard, Aadhar, Status
+function downloadLabourCSV(){
+  const rows = DATA.labours.slice().sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  if(!rows.length){ toast("Abhi koi Labour nahi hai", "error"); return; }
+  const q = v => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
+  const csv = "\uFEFF" + ["Sr No", "Jobcard No", "Name", "Aadhar No", "Status"].map(q).join(",") + "\r\n" +
+    rows.map((l, i) => [i + 1, l.jobcardNo, l.name, l.aadhar, l.status].map(q).join(",")).join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "labour-list-" + todayISO() + ".csv";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  toast(rows.length + " Labour ki list download ho gayi", "success");
+}
+
+// ---- v45: Kitna Mila ----
+function mateOf(p){ return round2((Number(p.amount) || 0) * 0.5); }
+function setMila(paymentId, amt, quiet){
+  const p = DATA.payments.find(x => x.id === paymentId);
+  const d = p ? DATA.demands.find(x => x.date === p.date && x.labourId === p.labourId) : null;
+  if(!p || !d){ if(!quiet) toast("Is payment ki Demand nahi mili", "error"); return false; }
+  if(!isPaymentCredited(p)){ if(!quiet) toast("Pehle AC Credit karein, phir Mila likhein", "error"); return false; }
+  amt = round2(amt);
+  if(isNaN(amt) || amt < 0){ if(!quiet) toast("Sahi Amount daalein", "error"); return false; }
+  const room = round2(mateOf(p) - getPaymentOtherPaid(p));
+  if(amt > room + 0.009){ if(!quiet) toast("Itna nahi — is payment me max ₹" + Math.max(0, room).toFixed(2) + " mil sakta hai", "error"); return false; }
+  d.mila = amt; d.milaDate = amt > 0 ? todayISO() : "";
+  return true;
+}
+function setMilaFromInput(paymentId, prefix){
+  const el = $((prefix || "mila-") + paymentId);
+  if(!el) return;
+  const ok = setMila(paymentId, el.value === "" ? 0 : parseFloat(el.value));
+  if(ok){ persist(); toast("Mila save ho gaya ✅", "success"); }
+  refreshPaymentViews();
+}
+function tickMila(paymentId){
+  const p = DATA.payments.find(x => x.id === paymentId); if(!p) return;
+  const room = Math.max(0, round2(mateOf(p) - getPaymentOtherPaid(p)));
+  if(setMila(paymentId, room)){ persist(); toast("Poora Mila ✅ (₹" + room.toFixed(2) + ")", "success"); }
+  refreshPaymentViews();
+}
+function bulkMilaFull(){
+  const ids = Array.from(document.querySelectorAll(".ac-row-chk:checked")).map(c => c.value);
+  if(!ids.length){ toast("Pehle list se entry select karein", "error"); return; }
+  let c = 0, skip = 0;
+  ids.forEach(id => {
+    const p = DATA.payments.find(x => x.id === id); if(!p) return;
+    const room = Math.max(0, round2(mateOf(p) - getPaymentOtherPaid(p)));
+    if(setMila(id, room, true)) c++; else skip++;
+  });
+  persist(); refreshPaymentViews();
+  toast(c + " entry me Poora Mila ✅" + (skip ? " (" + skip + " skip — Credit nahi hui)" : ""), c ? "success" : "error");
+}
+function bulkMilaAmount(){
+  const v = $("acBulkMila") ? $("acBulkMila").value : "";
+  const amt = parseFloat(v);
+  const ids = Array.from(document.querySelectorAll(".ac-row-chk:checked")).map(c => c.value);
+  if(!ids.length){ toast("Pehle list se entry select karein", "error"); return; }
+  if(v === "" || isNaN(amt) || amt < 0){ toast("Kitna Mila amount likhein", "error"); return; }
+  let c = 0, skip = 0;
+  ids.forEach(id => { if(setMila(id, amt, true)) c++; else skip++; });
+  persist(); refreshPaymentViews();
+  toast(c + " entry me ₹" + amt + " Mila" + (skip ? " (" + skip + " skip — Credit nahi / amount zyada)" : ""), c ? "success" : "error");
+}
+// Purane data ke liye ek baar: jin Demand par comment tha (= mila maana jata tha) unka Mila amount bhar do
+function migrateV45(){
+  if(DATA.migMilaV45) return;
+  DATA.migMilaV45 = true;
+  let n = 0;
+  DATA.payments.forEach(p => {
+    const d = DATA.demands.find(x => x.date === p.date && x.labourId === p.labourId);
+    if(!d || d.mila !== undefined) return;
+    if(d.comment && String(d.comment).trim()){
+      const room = Math.max(0, round2(mateOf(p) - getPaymentOtherPaid(p)));
+      d.mila = room; d.milaDate = ""; n++;
+    }
+  });
+  persist();
+}
+function openPwModal(){ $("pwModalOverlay").classList.remove("hidden"); }
+function closePwModal(){ $("pwModalOverlay").classList.add("hidden"); }
+
+// ---- Calendar ----
+let calState = null;
+const CAL_MONTHS = ["Janvari","Farvari","March","April","May","June","July","August","September","October","November","December"];
+function calDemandMap(){
+  const map = {};
+  DATA.demands.forEach(d => {
+    const m = map[d.date] || (map[d.date] = { n: 0, cred: 0, labs: new Set() });
+    m.n++; m.labs.add(d.labourId);
+    const ac = DATA.acCredits.find(a => a.date === d.date && a.labourId === d.labourId);
+    if(ac && ac.status === "Credited") m.cred++;
+  });
+  return map;
+}
+function openCal(el){
+  const cur = el.value || todayISO();
+  const [y, m] = cur.split("-").map(Number);
+  calState = { el, y, m: m - 1 };
+  renderCal();
+  $("calOverlay").classList.remove("hidden");
+}
+function closeCal(){ $("calOverlay").classList.add("hidden"); calState = null; }
+function calNav(d){
+  calState.m += d;
+  if(calState.m < 0){ calState.m = 11; calState.y--; }
+  if(calState.m > 11){ calState.m = 0; calState.y++; }
+  renderCal();
+}
+function renderCal(){
+  const { el, y, m } = calState;
+  const mode = el.getAttribute("data-calmode") || "all";
+  const map = mode === "none" ? {} : calDemandMap();
+  const sel = Array.from(typeof demandSelected !== "undefined" ? demandSelected : []);
+  const useMine = mode === "labour" && sel.length > 0;
+  const first = new Date(y, m, 1).getDay();
+  const days = new Date(y, m + 1, 0).getDate();
+  const today = todayISO();
+  let cells = ["Ra","So","Ma","Bu","Gu","Shu","Sha"].map(x => `<div class="cal-dow">${x}</div>`).join("");
+  for(let i = 0; i < first; i++) cells += `<div class="cal-d empty"></div>`;
+  for(let d = 1; d <= days; d++){
+    const iso = `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const info = map[iso];
+    let cls = "cal-d", dot = "", title = "";
+    if(info){
+      cls += " has" + (info.cred === info.n ? " all" : "");
+      dot = info.cred === info.n ? "🟢" : (info.cred > 0 ? "🟠" : "⚪");
+      title = info.n + " demand";
+      if(useMine && sel.some(id => info.labs.has(id))) cls += " mine";
+    }
+    if(iso === today) cls += " today";
+    if(iso === el.value) cls += " sel";
+    cells += `<button type="button" class="${cls}" title="${title}" onclick="calPick('${iso}')">${d}${dot ? `<span class="cdot">${dot}</span>` : ""}</button>`;
+  }
+  const legend = mode === "none" ? "" :
+    `<div class="cal-legend">🟢 Demand + sab Credit &nbsp; 🟠 Demand, kuch baaki &nbsp; ⚪ Demand, Credit nahi${useMine ? "<br>▣ Mote kinare = chune hue Labour ki Demand" : ""}</div>`;
+  $("calBox").innerHTML = `
+    <div class="cal-head"><button type="button" onclick="calNav(-1)">◀</button><span>${CAL_MONTHS[m]} ${y}</span><button type="button" onclick="calNav(1)">▶</button></div>
+    <div class="cal-grid">${cells}</div>${legend}
+    <div class="cal-foot">
+      <button type="button" class="btn btn-gray btn-sm" onclick="calPick('')">✖️ Clear</button>
+      <button type="button" class="btn btn-blue btn-sm" onclick="calPick('${today}')">Aaj</button>
+      <button type="button" class="btn btn-gray btn-sm" onclick="closeCal()">Band</button>
+    </div>`;
+}
+function calPick(iso){
+  if(!calState) return;
+  const el = calState.el;
+  el.value = iso;
+  el.dispatchEvent(new Event("change", { bubbles: true }));
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+  closeCal();
+}
+function enhanceDates(){
+  const proto = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+  [["onePasteDate","all"],["demandDate","labour"],["reportDate","all"],["acDate","all"],["acCreditDate","none"],["demandFilterDate","all"]].forEach(([id, mode]) => {
+    const el = $(id);
+    if(!el || el.dataset.calOn) return;
+    let iso = el.value || "";
+    el.type = "text"; el.readOnly = true; el.placeholder = "dd-mm-yyyy";
+    el.classList.add("cal-input");
+    el.setAttribute("data-calmode", mode);
+    el.dataset.calOn = "1";
+    Object.defineProperty(el, "value", {
+      configurable: true,
+      get(){ return iso; },
+      set(v){ iso = v || ""; proto.set.call(el, iso ? fmtDate(iso) : ""); }
+    });
+    el.value = iso;
+    el.addEventListener("click", () => openCal(el));
+  });
+}
+if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", enhanceDates); else enhanceDates();
