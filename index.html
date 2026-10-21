@@ -403,6 +403,14 @@ main{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
 }
 footer.app-footer{position:static;background:none;backdrop-filter:none;border:none;padding:0 0 calc(86px + env(safe-area-inset-bottom));font-size:11.5px}
 main{padding-bottom:12px!important}
+.today-bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.today-bar button{border:1.5px solid #e0a020;background:#fff4dc;color:#6b4500;border-radius:999px;padding:6px 11px;font-size:12.5px;font-weight:700;cursor:pointer}
+.today-bar button.ok{border-color:#9cd4b3;background:#e6f6ec;color:#0f6a3a}
+.today-bar button.bk{border-color:#e08a8a;background:#fde8e8;color:#9b2222}
+.today-bar button.un{border-color:#b9c3bd;background:#eef1ef;color:#33463c}
+.kh-act{display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-left:6px}
+.kh-act .btn{padding:2px 6px;min-height:26px;font-size:12px}
+@media print{.rep-unsel{display:none!important}}
 /* Laptop / badi screen */
 @media(min-width:900px){
   main{max-width:1100px;padding:20px 16px 100px}
@@ -413,6 +421,16 @@ main{padding-bottom:12px!important}
   .card{padding:18px}
   .btn:hover{transform:translateY(-1px)}
 }
+
+/* v49 */
+.fl-box{background:#f3faf5;border:1px solid #cfe6d7;border-radius:12px;padding:10px;margin-bottom:10px}
+.fl-chips{display:flex;flex-wrap:wrap;gap:6px}
+.fl-chip{position:relative;background:#e6f6ec;border:1.5px solid #9cd4b3;border-radius:10px;padding:5px 24px 5px 9px;font-size:12.5px;line-height:1.3;cursor:pointer}
+.fl-chip.on{background:var(--green);color:#fff;border-color:var(--green)}
+.fl-x{position:absolute;top:2px;right:6px;font-size:12px;opacity:.7;padding:2px}
+.gadbad-box{background:#fff8e6;border:1.5px solid #e0a020;border-radius:12px;padding:10px;margin-bottom:8px;max-height:50vh;overflow:auto}
+.gb-row{padding:6px 0;border-bottom:1px solid #f0e2bd;font-size:13px}
+.gb-row:last-of-type{border-bottom:none}
 </style>
 </head>
 <body>
@@ -499,6 +517,7 @@ main{padding-bottom:12px!important}
         <h3>📒 Labour Khata (Mate Share Hisaab)</h3>
         <p style="font-size:12.5px;color:var(--muted);margin-bottom:10px">Har Labour ka apna khata — AC Credit hote hi uska <b>Mate Share baaki</b> yahan chadh jata hai. Jitna Labour ne diya (<b style="color:#146c33">🟢 Mile</b>) aur jitna aapne diya (<b style="color:#c0392b">🔴 Diye</b>), sab ka running balance. Naam par tap karke poora khata kholein.</p>
         <div class="summary-grid" id="dashKhataSummary"></div>
+        <div id="todayBar" class="today-bar"></div>
         <div class="row" style="gap:6px;margin-bottom:8px">
           <button class="btn btn-green btn-sm" onclick="openLabourModal(1)">➕ Labour Jodo</button>
           <button class="btn btn-blue btn-sm" onclick="downloadLabourCSV()">⬇️ Labour Download</button>
@@ -508,8 +527,10 @@ main{padding-bottom:12px!important}
           <button class="btn btn-outline btn-sm" id="dashPendBtn" onclick="openACPending(null)">⏳ Credit baaki</button>
           <button class="btn btn-green btn-sm" onclick="openBulkDiya()">👥 Bulk Diya</button>
         </div>
+        <div class="row" style="margin-top:6px"><button class="btn btn-outline btn-sm" id="gadbadBtn" onclick="toggleGadbad()">🔍 Gadbad jaanch</button></div>
+        <div id="gadbadBox" class="gadbad-box hidden"></div>
         <div class="row mt">
-          <input type="text" id="dashKhataSearch" class="grow" placeholder="🔍 Naam ya Jobcard se dhoondein" oninput="renderDashboardKhata()">
+          <input type="text" id="dashKhataSearch" class="grow" placeholder="🔍 Naam / Jobcard / Aadhaar" oninput="renderDashboardKhata()">
           <label class="chip-chk"><input type="checkbox" id="dashKhataOnlyPending" onchange="renderDashboardKhata()"> ⏳ Sirf Pending</label>
         </div>
         <div class="chk-list mt" id="dashKhataList" style="max-height:420px"></div>
@@ -552,7 +573,7 @@ main{padding-bottom:12px!important}
             <input type="checkbox" id="reportSortBaaki" onchange="generateReport()"> Sabse Zyada Baaki Pehle
           </label>
         </div>
-        <p style="font-size:12px;color:var(--muted);margin-top:6px">ℹ️ <b>Kitna Mila</b> me ✅ dabao (poora hissa) ya amount likho. <b>Comment</b> sirf note hai (jaise: agle hafte dega). Print / PDF me ye sab aata hai.</p>
+        <p style="font-size:12px;color:var(--muted);margin-top:6px">ℹ️ <b>Kitna Mila</b> me ✅ dabao (poora hissa) ya amount likho. <b>Comment</b> sirf note hai (jaise: agle hafte dega). Print / PDF me ye sab aata hai. <b>Rows tik karoge to Print/PDF me sirf wahi</b> aayengi.</p>
         <div class="row mt" style="background:#e8f7ee;padding:10px;border-radius:10px;border:1.5px dashed var(--green-mid);align-items:flex-end">
           <div class="field grow" style="margin-bottom:0;min-width:150px">
             <label style="font-size:12.5px;color:var(--green);font-weight:700">💬 Comment (note)</label>
@@ -564,6 +585,7 @@ main{padding-bottom:12px!important}
           </div>
           <button class="btn btn-blue btn-sm" onclick="bulkApplyReport()">✏️ Apply to Selected</button>
           <button class="btn btn-green btn-sm" onclick="bulkMilaFull('rep-row-chk')">✅ Poora Mila</button>
+          <button class="btn btn-gray btn-sm undo-btn" style="display:none" onclick="undoLast()">↩️ Wapas</button>
           <div style="flex-basis:100%;font-size:11.5px;color:var(--muted)">Neeche table se rows select karein. Jo khana khaali ho use chhua nahi jayega.</div>
         </div>
         <div class="row mt">
@@ -590,6 +612,19 @@ main{padding-bottom:12px!important}
     <div id="panel-nrega" class="panel">
       <div class="card no-print">
         <h3>📄 <span style="font-size:12px;color:var(--muted);font-weight:400">(sirf Active Labour)</span></h3>
+        <div class="fl-box">
+          <div style="font-size:12.5px;font-weight:700;color:var(--green);margin-bottom:5px">💾 Save ki hui list (dabao → naam aa jayenge)</div>
+          <div id="formListChips" class="fl-chips"></div>
+          <div class="row mt">
+            <input type="date" id="formListDate" style="width:150px">
+            <input type="text" id="formListNote" class="grow" placeholder="📝 Note: jaise somwar ko lagai demand">
+          </div>
+          <div class="row" style="margin-top:6px">
+            <button class="btn btn-green btn-sm" onclick="saveFormList(false)">💾 Save / ♻️ Update</button>
+            <button class="btn btn-outline btn-sm" onclick="saveFormList(true)">➕ Nai list banao</button>
+          </div>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:4px">Download karte hi list apne-aap save ho jati hai.</div>
+        </div>
         <div class="row">
           <input type="text" id="nregaSearch" class="grow" placeholder="🔍 Naam / Jobcard se search karein" oninput="renderNregaSearch()">
         </div>
@@ -894,6 +929,7 @@ main{padding-bottom:12px!important}
           </div>
           <button class="btn btn-blue btn-sm" onclick="bulkApplyAC()">✏️ Apply to Selected</button>
           <button class="btn btn-green btn-sm" onclick="bulkMilaFull()">✅ Poora Mila</button>
+          <button class="btn btn-gray btn-sm undo-btn" style="display:none" onclick="undoLast()">↩️ Wapas</button>
           <div style="flex-basis:100%;font-size:11.5px;color:var(--muted)">Jo khana khaali ho use chhua nahi jayega — sirf bhara hua lagega.</div>
         </div>
         <div class="table-wrap mt">
@@ -954,6 +990,24 @@ main{padding-bottom:12px!important}
 <div id="calOverlay" class="modal-overlay-lg hidden" onclick="if(event.target.id==='calOverlay')closeCal()">
   <div class="cal-box" id="calBox"></div>
 </div>
+<!-- 💰 Quick Mila (Khata ki pankti se) -->
+<div id="quickMilaOverlay" class="modal-overlay-lg hidden" style="z-index:8100" onclick="if(event.target.id==='quickMilaOverlay')closeQuickMila()">
+  <div class="modal-lg" style="max-width:420px">
+    <button class="close-x" onclick="closeQuickMila()">✖️</button>
+    <h3 id="qmTitle" style="margin-bottom:6px;color:var(--green)">💰 Mila</h3>
+    <div id="qmInfo" style="font-size:13px;color:var(--muted);margin-bottom:10px"></div>
+    <div class="row">
+      <div class="field grow"><label>Kitna Mila ₹</label><input type="number" id="qmAmount" min="0" step="any"></div>
+      <div class="field grow"><label>Note (optional)</label><input type="text" id="qmNote" placeholder="jaise: aadha diya"></div>
+    </div>
+    <div class="row">
+      <button class="btn btn-green" style="flex:1" onclick="saveQuickMila()">✅ Save</button>
+      <button class="btn btn-gray" onclick="closeQuickMila()">Cancel</button>
+    </div>
+    <div style="font-size:11.5px;color:var(--muted);margin-top:8px">Amount sabse purane baaki payment par pehle lagta hai.</div>
+  </div>
+</div>
+
 <div id="ledgerModalOverlay" class="modal-overlay-lg hidden">
   <div class="modal-lg">
     <button class="close-x" onclick="closeLedgerModal()">✖️</button>
@@ -1004,7 +1058,7 @@ main{padding-bottom:12px!important}
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   }
 </script>
-<script src="app.js?v=47"></script>
+<script src="app.js?v=49"></script>
 <script>
 /* Agar app.js load hi na ho (404 / internet / purani cache) to Login button "dead" lagta hai —
    user ko saaf message dikhao ki asli problem kya hai */

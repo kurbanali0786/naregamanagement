@@ -54,6 +54,7 @@ let DATA = {
   payments: [],  // {id, date, labourId, amount, mateShare, labourShare}
   acCredits: [], // {id, date, labourId, status, diya}
   trash: [],     // {id, type: 'labour'|'demand'|'payment', data, cascade, deletedAt}
+  formLists: [], // {id, note, date, ids[]} — Form 10/6 saved lists
   ledger: []     // {id, labourId, date, type:'mile'|'diye', amount, comment, balanceAfter} — Labour Khata
 };
 
@@ -364,7 +365,7 @@ firebase.auth().onAuthStateChanged(user => {
     currentUser = null;
     $("authScreen").classList.remove("hidden");
     $("appScreen").classList.add("hidden");
-    DATA = { labours: [], demands: [], payments: [], acCredits: [], trash: [], ledger: [] };
+    DATA = { labours: [], demands: [], payments: [], acCredits: [], trash: [], ledger: [], formLists: [] };
   }
 });
 } else {
@@ -397,7 +398,8 @@ function initStorage(uid){
         payments: toArray(val && val.payments),
         acCredits: toArray(val && val.acCredits),
         trash: toArray(val && val.trash),
-        ledger: toArray(val && val.ledger)
+        ledger: toArray(val && val.ledger),
+        formLists: toArray(val && val.formLists)
       };
       renderAll();
     }, err => {
@@ -422,11 +424,12 @@ function fallbackToLocalStorage(uid){
         payments: toArray(parsed.payments),
         acCredits: toArray(parsed.acCredits),
         trash: toArray(parsed.trash),
-        ledger: toArray(parsed.ledger)
+        ledger: toArray(parsed.ledger),
+        formLists: toArray(parsed.formLists)
       };
     } catch(e){ console.warn("LocalStorage parse error", e); }
   } else {
-    DATA = { labours: [], demands: [], payments: [], acCredits: [], trash: [], ledger: [] };
+    DATA = { labours: [], demands: [], payments: [], acCredits: [], trash: [], ledger: [], formLists: [] };
   }
   renderAll();
   toast("Offline Mode — LocalStorage me save ho raha hai", "info");
@@ -442,6 +445,7 @@ function persist(){
   DATA.acCredits = toArray(DATA.acCredits);
   DATA.trash = toArray(DATA.trash);
   DATA.ledger = toArray(DATA.ledger);
+  DATA.formLists = toArray(DATA.formLists);
 
   if(firebaseEnabled && dbRef){
     dbRef.set(DATA).catch(err => {
@@ -485,6 +489,7 @@ function renderAll(){
   renderTrash();
   renderNregaSearch();
   buildNregaFormTable();
+  renderFormLists();
 }
 
 /* ================================================================
@@ -682,7 +687,7 @@ function renderKhataListInto(elId, term){
   const msMap = computeMateStatusMap();
   let list = DATA.labours.slice();
   if(term){
-    list = list.filter(l => l.name.toLowerCase().includes(term) || String(l.jobcardNo || "").toLowerCase().includes(term));
+    list = list.filter(l => l.name.toLowerCase().includes(term) || String(l.jobcardNo || "").toLowerCase().includes(term) || String(l.aadhar || "").includes(term.replace(/\s+/g, "")));
   }
   const cb = $(elId.replace("List", "OnlyPending"));
   if(cb && cb.checked) list = list.filter(l => (msMap[l.id] || { pending: 0 }).pending > 0);
@@ -711,9 +716,11 @@ function renderKhataListInto(elId, term){
           <div class="badge ${cls}" style="font-size:13px">${balTxt}</div>
           <div style="font-size:10.5px;color:var(--muted);margin-top:2px">${sub}</div>
         </div>
-        <div style="display:flex;flex-direction:column;gap:3px;margin-left:6px" onclick="event.stopPropagation()">
-          <button class="btn btn-gray btn-sm" style="padding:2px 7px" title="Edit Labour" onclick="editLabourFromKhata('${l.id}')">✏️</button>
-          <button class="btn btn-red btn-sm" style="padding:2px 7px" title="Delete Labour" onclick="deleteLabour('${l.id}')">🗑️</button>
+        <div class="kh-act" onclick="event.stopPropagation()">
+          <button class="btn btn-green btn-sm" title="Mila likho" onclick="openQuickMila('${l.id}')">💰</button>
+          <button class="btn btn-sm" style="background:#25D366;color:#fff" title="WhatsApp par hisaab" onclick="downloadLabourKhataPDF('${l.id}','share')">📲</button>
+          <button class="btn btn-gray btn-sm" title="Edit Labour" onclick="editLabourFromKhata('${l.id}')">✏️</button>
+          <button class="btn btn-red btn-sm" title="Delete Labour" onclick="deleteLabour('${l.id}')">🗑️</button>
         </div>
       </div>
     `;
@@ -725,6 +732,7 @@ function renderDashboardKhata(){
   if(pb){ const n = getWaitingPayments(null).length; pb.innerHTML = "⏳ Credit baaki" + (n ? " (<b>" + n + "</b>)" : ""); }
   renderKhataSummaryInto("dashKhataSummary");
   renderKhataListInto("dashKhataList", $("dashKhataSearch") ? $("dashKhataSearch").value : "");
+  renderTodayBar();
 }
 
 /* ---------------------------------------------------------------
@@ -1220,7 +1228,16 @@ function refreshTab(name){
     renderDemands();
   }
   if(name === "report") generateReport();
-  if(name === "nrega"){ renderNregaSearch(); buildNregaFormTable(); }
+  if(name === "nrega"){
+    if(!window.__nregaRestored){
+      window.__nregaRestored = true;
+      try{
+        const ids = JSON.parse(localStorage.getItem(nregaLSKey()) || "[]");
+        ids.forEach(id => { if(DATA.labours.some(l => l.id === id)) nregaSelected.add(id); });
+      }catch(e){}
+    }
+    renderNregaSearch(); buildNregaFormTable();
+  }
 }
 
 function manualRefresh(name){
@@ -1905,7 +1922,9 @@ function exportDataJSON(){
   link.href = URL.createObjectURL(blob);
   link.download = `Labour_Jobcard_Backup_${todayISO()}.json`;
   link.click();
+  try{ localStorage.setItem("lj_lastBackup", String(Date.now())); }catch(e){}
   toast("Backup file download ho gayi");
+  if(typeof renderTodayBar === "function") renderTodayBar();
 }
 
 function importDataJSON(event){
@@ -1933,7 +1952,8 @@ function importDataJSON(event){
           payments: toArray(parsed.payments),
           acCredits: toArray(parsed.acCredits),
           trash: toArray(parsed.trash),
-          ledger: toArray(parsed.ledger)
+          ledger: toArray(parsed.ledger),
+        formLists: toArray(parsed.formLists)
         };
         persist();
         renderAll();
@@ -2808,7 +2828,7 @@ function deleteSelectedLabours(){
 function clearAllLabours(){
   if(!DATA.labours.length){ toast("Labour List pehle se khaali hai", "info"); return; }
   showConfirm(`Pura Labour List (${DATA.labours.length} Labour) clear karna hai?`, () => {
-    DATA = { labours: [], demands: [], payments: [], acCredits: [], trash: [] };
+    DATA = { labours: [], demands: [], payments: [], acCredits: [], trash: [], formLists: [] };
     persist();
     renderAll();
     toast("Pura Labour List clear ho gaya");
@@ -3692,7 +3712,16 @@ function generateReport(){
   }
 }
 
+function reportSelectedIds(){
+  return new Set(Array.from(document.querySelectorAll(".rep-row-chk:checked")).map(c => c.value));
+}
 function printReport(){
+  const selIds = reportSelectedIds();
+  if(selIds.size) document.querySelectorAll("#reportTableBody tr").forEach(tr => {
+    const c = tr.querySelector(".rep-row-chk");
+    if(!c || !c.checked) tr.classList.add("rep-unsel");
+  });
+  const clearSel = () => document.querySelectorAll("#reportTableBody tr.rep-unsel").forEach(tr => tr.classList.remove("rep-unsel"));
   const hasComments = DATA.demands.some(d => d.comment && String(d.comment).trim());
   const reportArea = $("reportPrintArea");
   if(!hasComments) reportArea.classList.add("no-comments");
@@ -3701,7 +3730,7 @@ function printReport(){
   document.head.appendChild(st);
   document.body.classList.add("print-report");
   window.print();
-  setTimeout(() => { document.body.classList.remove("print-report"); st.remove(); if(!hasComments) reportArea.classList.remove("no-comments"); }, 500);
+  setTimeout(() => { document.body.classList.remove("print-report"); st.remove(); clearSel(); if(!hasComments) reportArea.classList.remove("no-comments"); }, 500);
 }
 
 /* ================================================================
@@ -3709,7 +3738,8 @@ function printReport(){
    (CSV ki jagah seedha PDF download hota hai)
 ================================================================ */
 function getReportRowsData(){
-  return getReportRows().map(r => ({
+  const selIds = reportSelectedIds();
+  return getReportRows().filter(r => !selIds.size || (r.p && selIds.has(r.p.id))).map(r => ({
     name: r.l.name || "—",
     jobcardNo: r.l.jobcardNo || "—",
     kulDin: r.d.kulDin ?? "",
@@ -4014,8 +4044,10 @@ function clearNregaSelection(){
   toast("Selection clear ho gayi", "info");
 }
 
+function nregaLSKey(){ return "lj_nregaSel_" + (currentUser ? currentUser.uid : "x"); }
 function updateNregaSelectedCount(){
   $("nregaSelectedCount").textContent = `${nregaSelected.size} selected`;
+  try{ localStorage.setItem(nregaLSKey(), JSON.stringify(Array.from(nregaSelected))); }catch(e){}
 }
 
 // Naya function — Show All toggle
@@ -4563,3 +4595,195 @@ function enhanceDates(){
   });
 }
 if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", enhanceDates); else enhanceDates();
+
+
+/* ================================================================
+   v48 — Aaj ka kaam, Quick Mila, Backup yaad, Wapas (Undo)
+================================================================ */
+function renderTodayBar(){
+  const bar = $("todayBar");
+  if(!bar) return;
+  const cr = getWaitingPayments(null).length;
+  const ms = computeMateStatusMap();
+  let mb = 0; Object.keys(ms).forEach(k => { mb += ms[k].pending; });
+  let h = "";
+  if(cr) h += `<button onclick="openACPending(null)">🏦 ${cr} Credit baaki</button>`;
+  if(mb) h += `<button onclick="showMilaBaaki()">💰 ${mb} ka Mila baaki</button>`;
+  if(!cr && !mb && DATA.payments.length) h += `<button class="ok" style="cursor:default">✅ Sab hisaab barabar</button>`;
+  let last = 0; try{ last = Number(localStorage.getItem("lj_lastBackup")) || 0; }catch(e){}
+  const days = last ? Math.floor((Date.now() - last) / 86400000) : null;
+  if(DATA.labours.length && (days === null || days >= 7)) h += `<button class="bk" onclick="exportDataJSON()">💾 Backup lo${days === null ? "" : " (" + days + " din se nahi)"}</button>`;
+  if(undoStack.length) h += `<button class="un" onclick="undoLast()">↩️ Wapas: ${escapeHtml(undoStack[undoStack.length - 1].label)}</button>`;
+  bar.innerHTML = h;
+}
+function showMilaBaaki(){
+  const cb = $("dashKhataOnlyPending"); if(cb) cb.checked = true;
+  renderDashboardKhata();
+  const l = $("dashKhataList"); if(l) l.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+// ---- Quick Mila ----
+let quickMilaLabourId = null;
+function labourLeftTotal(labourId){
+  const pm = getPaidMap();
+  return round2(DATA.payments.filter(p => p.labourId === labourId && isPaymentCredited(p)).reduce((s, p) => s + getPaymentLeft(p, pm), 0));
+}
+function openQuickMila(labourId){
+  const l = DATA.labours.find(x => x.id === labourId); if(!l) return;
+  const left = labourLeftTotal(labourId);
+  if(left <= 0){ toast("Is Labour ka koi Credit hua baaki payment nahi hai", "error"); return; }
+  quickMilaLabourId = labourId;
+  $("qmTitle").textContent = "💰 " + l.name + " ne diya";
+  $("qmInfo").textContent = "Credit hue payments me baaki: ₹" + left.toFixed(2);
+  $("qmAmount").value = left; $("qmNote").value = "";
+  $("quickMilaOverlay").classList.remove("hidden");
+  setTimeout(() => { $("qmAmount").focus(); $("qmAmount").select(); }, 80);
+}
+function closeQuickMila(){ $("quickMilaOverlay").classList.add("hidden"); quickMilaLabourId = null; }
+function saveQuickMila(){
+  const id = quickMilaLabourId; if(!id) return;
+  const amt = round2(parseFloat($("qmAmount").value));
+  const left = labourLeftTotal(id);
+  if(isNaN(amt) || amt <= 0){ toast("Sahi Amount daalein", "error"); return; }
+  if(amt > left + 0.009){ toast("Itna nahi — baaki sirf ₹" + left.toFixed(2) + " hai", "error"); return; }
+  pushUndoSnap("Mila ₹" + amt);
+  applyMileToPayments(id, null, amt, ($("qmNote").value || "").trim() || "diya", todayISO());
+  closeQuickMila();
+  refreshPaymentViews();
+  toast("₹" + amt.toFixed(2) + " Mila ✅", "success");
+}
+
+// ---- Wapas (Undo) — bulk kaam ke liye ----
+const undoStack = [];
+function pushUndoSnap(label){
+  undoStack.push({ label, snap: JSON.stringify(DATA) });
+  if(undoStack.length > 5) undoStack.shift();
+  updateUndoButtons();
+}
+function updateUndoButtons(){
+  const top = undoStack[undoStack.length - 1];
+  document.querySelectorAll(".undo-btn").forEach(b => {
+    b.style.display = top ? "" : "none";
+    if(top) b.textContent = "↩️ Wapas: " + top.label;
+  });
+  renderTodayBar();
+}
+function undoLast(){
+  const u = undoStack.pop();
+  if(!u){ toast("Wapas karne layak kuch nahi", "error"); return; }
+  DATA = JSON.parse(u.snap);
+  persist();
+  renderAll();
+  refreshPaymentViews();
+  updateUndoButtons();
+  toast("Wapas ho gaya: " + u.label, "success");
+}
+function wrapUndo(name, label){
+  const f = window[name];
+  if(typeof f !== "function") return;
+  window[name] = function(){
+    const snap = JSON.stringify(DATA);
+    const r = f.apply(this, arguments);
+    if(JSON.stringify(DATA) !== snap){
+      undoStack.push({ label, snap });
+      if(undoStack.length > 5) undoStack.shift();
+      updateUndoButtons();
+    }
+    return r;
+  };
+}
+["bulkACCredit:Bulk Credit","bulkUndoACCredit:Bulk Credit Undo","bulkMilaFull:Poora Mila","bulkMilaAmount:Bulk Mila","applyBulkBoth:Bulk Comment/Mila","saveBulkDiya:Bulk Diya","bulkApplyComment:Bulk Comment"]
+  .forEach(x => { const [n, l] = x.split(":"); wrapUndo(n, l); });
+
+
+/* ================================================================
+   v49: 💾 FORM 10/6 SAVED LISTS + 🔍 GADBAD JAANCH
+================================================================ */
+let curFormListId = null;
+function renderFormLists(){
+  const box = $("formListChips"); if(!box) return;
+  const lists = toArray(DATA.formLists);
+  if(!lists.length){ box.innerHTML = '<span style="font-size:12px;color:var(--muted)">Abhi koi list save nahi — labour chuno, date/note likho, 💾 Save dabao.</span>'; return; }
+  box.innerHTML = lists.map(s => {
+    const n = (s.ids || []).length, on = s.id === curFormListId;
+    return `<span class="fl-chip${on ? " on" : ""}" onclick="loadFormList('${s.id}')"><b>${escapeHtml(s.note || "(bina note)")}</b><br><small>${s.date ? "📅 " + fmtDate(s.date) + " · " : ""}${n} Labour</small><span class="fl-x" onclick="event.stopPropagation();deleteFormList('${s.id}')">✕</span></span>`;
+  }).join("");
+}
+function loadFormList(id){
+  const s = toArray(DATA.formLists).find(x => x.id === id); if(!s) return;
+  const alive = (s.ids || []).filter(i => DATA.labours.some(l => l.id === i));
+  const gone = (s.ids || []).length - alive.length;
+  nregaSelected = new Set(alive);
+  curFormListId = id;
+  if($("formListDate")) $("formListDate").value = s.date || "";
+  if($("formListNote")) $("formListNote").value = s.note || "";
+  updateNregaSelectedCount(); renderNregaSearch(); buildNregaFormTable(); renderFormLists();
+  toast(`${alive.length} Labour aa gaye — ab hatao / jodo` + (gone ? ` (${gone} labour ab maujood nahi)` : ""), "info");
+}
+function saveFormList(asNew, quiet){
+  if(!nregaSelected.size){ if(!quiet) toast("Pehle Labour select karein", "error"); return; }
+  const note = ($("formListNote").value || "").trim(), date = $("formListDate").value || "";
+  const ids = Array.from(nregaSelected);
+  DATA.formLists = toArray(DATA.formLists);
+  let s = (!asNew && curFormListId) ? DATA.formLists.find(x => x.id === curFormListId) : null;
+  if(s){ s.note = note; s.date = date; s.ids = ids; }
+  else { s = { id: "fl" + Date.now().toString(36) + Math.random().toString(36).slice(2,5), note, date, ids }; DATA.formLists.unshift(s); }
+  curFormListId = s.id;
+  persist(); renderFormLists();
+  if(!quiet) toast("💾 List save ho gayi");
+}
+function deleteFormList(id){
+  const s = toArray(DATA.formLists).find(x => x.id === id); if(!s) return;
+  showConfirm(`"${s.note || "bina note"}" list hata dein? (Labour nahi hatenge)`, () => {
+    DATA.formLists = DATA.formLists.filter(x => x.id !== id);
+    if(curFormListId === id) curFormListId = null;
+    persist(); renderFormLists(); toast("List hata di");
+  }, "List Hatayein?");
+}
+(function(){
+  const orig = downloadNregaFormsPDF;
+  downloadNregaFormsPDF = function(which, mode){
+    try{ if(nregaSelected.size) saveFormList(false, true); }catch(e){}
+    return orig.apply(this, arguments);
+  };
+})();
+
+function gadbadList(){
+  const out = [], L = id => { const l = DATA.labours.find(x => x.id === id); return l ? l.name : "(labour hata hua)"; };
+  const demKey = {};
+  DATA.demands.forEach(d => {
+    const k = d.date + "|" + d.labourId;
+    if(!DATA.labours.some(l => l.id === d.labourId)) out.push(["🧍", "Demand ka labour maujood nahi", fmtDate(d.date)]);
+    if(demKey[k]) out.push(["♊", "Ek hi din ki Demand do baar", `${L(d.labourId)} · ${fmtDate(d.date)}`]);
+    demKey[k] = 1;
+  });
+  DATA.payments.forEach(p => {
+    const nm = L(p.labourId), dt = fmtDate(p.date);
+    if(!DATA.labours.some(l => l.id === p.labourId)) out.push(["🧍", "Payment ka labour maujood nahi", dt]);
+    if(!demKey[p.date + "|" + p.labourId]) out.push(["💸", "Payment hai par Demand nahi", `${nm} · ${dt}`]);
+    const amt = Number(p.amount) || 0;
+    if(amt > 0 && Math.abs((Number(p.mateShare) || 0) - amt * 0.5) > 0.5) out.push(["🧮", "Mate share amount ka aadha nahi", `${nm} · ${dt}`]);
+    try{ if(getPaymentMila(p) > (Number(p.mateShare) || amt * 0.5) + 0.5) out.push(["⚠️", "Mila hissa se zyada hai", `${nm} · ${dt}`]); }catch(e){}
+  });
+  DATA.acCredits.forEach(c => {
+    if(!DATA.labours.some(l => l.id === c.labourId)) out.push(["🧍", "AC Credit ka labour maujood nahi", fmtDate(c.date)]);
+  });
+  const jc = {};
+  DATA.labours.forEach(l => {
+    if(!String(l.aadhar || "").trim()) out.push(["🪪", "Aadhaar nahi bhara", l.name]);
+    const k = String(l.jobcardNo || "").trim() + "|" + String(l.name || "").trim().toLowerCase();
+    if(k !== "|" && jc[k]) out.push(["♊", "Same naam + Jobcard do baar", `${l.name} · ${l.jobcardNo}`]);
+    jc[k] = 1;
+  });
+  return out;
+}
+function toggleGadbad(){
+  const b = $("gadbadBox");
+  if(!b.classList.contains("hidden")){ b.classList.add("hidden"); return; }
+  const l = gadbadList();
+  b.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b style="color:#6b4500">🔍 Gadbad jaanch</b><button class="btn btn-gray btn-sm" onclick="toggleGadbad()">✖️ Band</button></div>' +
+    (l.length ? l.map(r => `<div class="gb-row">${r[0]} <b>${escapeHtml(r[1])}</b><br><small>${escapeHtml(String(r[2]))}</small></div>`).join("") + '<div style="font-size:11.5px;color:var(--muted);margin-top:6px">Ye sirf dikhata hai, kuch badalta nahi.</div>'
+      : '<div style="color:var(--green);font-weight:700">✅ Koi gadbad nahi mili</div>');
+  b.classList.remove("hidden");
+  const btn = $("gadbadBtn"); if(btn) btn.textContent = "🔍 Gadbad jaanch (" + l.length + ")";
+}
