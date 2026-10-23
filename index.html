@@ -468,6 +468,22 @@ main{padding-bottom:12px!important}
 @media screen and (min-width:700px){
   .rep-scroll{max-height:calc(100vh - 150px);max-height:calc(100dvh - 150px)}
 }
+
+/* v52: Labour / AC / Demand tables */
+@media screen{
+  .xs-scroll{max-height:60vh;max-height:60dvh;overflow:auto;-webkit-overflow-scrolling:touch;scrollbar-width:auto;scrollbar-color:#1f9d6a #e3ece6}
+  .xs-scroll table{border-collapse:separate;border-spacing:0}
+  .xs-scroll thead th{position:sticky;top:0;z-index:3;background:#e8f1ec}
+  .xs-scroll thead th.xs-st{z-index:5}
+  .xs-scroll td.xs-st{background:#fff}
+  .xs-scroll .xs-st-last{box-shadow:2px 0 4px rgba(0,0,0,.12)}
+  .xs-scroll::-webkit-scrollbar{height:16px;width:14px}
+  .xs-scroll::-webkit-scrollbar-track{background:#e3ece6;border-radius:8px}
+  .xs-scroll::-webkit-scrollbar-thumb{background:#1f9d6a;border-radius:8px;border:3px solid #e3ece6}
+  .xs-scroll tbody tr{cursor:pointer}
+  .xs-scroll tbody tr.rep-sel td{background:#fff0a8 !important;box-shadow:inset 0 2px 0 #e0a020,inset 0 -2px 0 #e0a020}
+  .mila-tick{width:18px;height:18px}
+}
 </style>
 </head>
 <body>
@@ -597,6 +613,7 @@ main{padding-bottom:12px!important}
         <h3>📊</h3>
         <div class="row">
           <div class="field grow"><label>Date (khaali chhodo = Sabhi dates)</label><input type="date" id="reportDate"></div>
+          <div class="field grow"><label>🔍 Naam / Jobcard</label><input type="text" id="reportSearch" placeholder="naam likho" oninput="generateReport()"></div>
           <button class="btn btn-green" onclick="generateReport()">📊 Generate</button>
         </div>
         <div class="row mt">
@@ -638,7 +655,7 @@ main{padding-bottom:12px!important}
         <div class="rep-nav no-print"><button class="btn btn-gray btn-sm" onclick="repScrollBy(-320)">◀ Left</button><button class="btn btn-gray btn-sm" onclick="repScrollBy(320)">Right ▶</button><span>Row par dabao = select ✔ (poori row highlight)</span></div>
         <div class="table-wrap mt rep-scroll">
           <table class="report-table">
-            <thead><tr><th class="nw no-print"><input type="checkbox" onchange="toggleRepSelectAll(this.checked)"></th><th class="nw">#</th><th>Name</th><th>Jobcard No.</th><th class="nw">Kul Divas</th><th class="nw">Pratidin ₹</th><th class="nw">Kul Bhugtan ₹</th><th class="nw">Mate ₹</th><th class="nw">Kitna Mila ₹</th><th class="nw">Baaki ₹</th><th class="nw">Mate Status</th><th class="nw">AC Status</th><th class="nw">Credit</th><th class="c-comment">Comment</th></tr></thead>
+            <thead><tr><th class="nw no-print"><input type="checkbox" onchange="toggleRepSelectAll(this.checked)"></th><th class="nw">#</th><th>Name</th><th>Jobcard No.</th><th class="nw">Demand Date</th><th class="nw">Kul Divas</th><th class="nw">Pratidin ₹</th><th class="nw">Kul Bhugtan ₹</th><th class="nw">Mate ₹</th><th class="nw">Kitna Mila ₹</th><th class="nw">Baaki ₹</th><th class="nw">Mate Status</th><th class="nw">AC Status</th><th class="nw">Credit</th><th class="c-comment">Comment</th></tr></thead>
             <tbody id="reportTableBody"></tbody>
           </table>
         </div>
@@ -828,6 +845,7 @@ main{padding-bottom:12px!important}
           <button class="btn btn-red btn-sm" onclick="deleteSelectedLabours()">🗑️ Delete Selected</button>
           <button class="btn btn-red btn-sm" onclick="clearAllLabours()">🧹 Clear All Labour</button>
         </div>
+        <div class="rep-nav no-print"><button class="btn btn-gray btn-sm" onclick="repScrollBy(-320,this)">◀ Left</button><button class="btn btn-gray btn-sm" onclick="repScrollBy(320,this)">Right ▶</button></div>
         <div class="table-wrap mt">
           <table>
             <thead><tr><th><input type="checkbox" class="hidden"></th><th style="width:36px;text-align:center">#</th><th>Jobcard No.</th><th>Name</th><th>Aadhar</th><th>Status</th><th>Actions</th></tr></thead>
@@ -970,6 +988,7 @@ main{padding-bottom:12px!important}
           <button class="btn btn-gray btn-sm undo-btn" style="display:none" onclick="undoLast()">↩️ Wapas</button>
           <div style="flex-basis:100%;font-size:11.5px;color:var(--muted)">Jo khana khaali ho use chhua nahi jayega — sirf bhara hua lagega.</div>
         </div>
+        <div class="rep-nav no-print"><button class="btn btn-gray btn-sm" onclick="repScrollBy(-320,this)">◀ Left</button><button class="btn btn-gray btn-sm" onclick="repScrollBy(320,this)">Right ▶</button></div>
         <div class="table-wrap mt">
           <table>
             <thead><tr><th><input type="checkbox" class="hidden"></th><th style="width:36px;text-align:center">#</th><th>Date</th><th>Jobcard</th><th>Name</th><th>Kul ₹</th><th>Mate Share ₹</th><th>Kitna Mila ₹</th><th>Mate Status</th><th>Status / Credited Date</th><th>Comment</th><th>Action</th></tr></thead>
@@ -988,7 +1007,8 @@ main{padding-bottom:12px!important}
           <button class="btn btn-gray btn-sm" onclick="manualRefresh('past')">🔄 Refresh</button>
         </div>
         <p style="font-size:12px;color:var(--muted);margin-top:8px">ℹ️ <b>Credit Status / Credit Date</b> ko bulk me 🏦 <b>AC Credit</b> (📒 Khata ke andar) se update karein. Comment / Bulk Comment bhi usi 🏦 popup me hai. <button class="btn btn-blue btn-sm" onclick="openACInKhata()">🏦 Kholein</button></p>
-<div class="table-wrap mt">
+<div class="rep-nav no-print"><button class="btn btn-gray btn-sm" onclick="repScrollBy(-320,this)">◀ Left</button><button class="btn btn-gray btn-sm" onclick="repScrollBy(320,this)">Right ▶</button></div>
+        <div class="table-wrap mt">
           <table>
             <thead><tr><th><input type="checkbox" id="demandListSelectAll" onchange="toggleDemandListSelectAll()"></th><th style="width:36px;text-align:center">#</th><th>Date</th><th>Jobcard</th><th>Name</th><th>Kul Din</th><th>Kul Hajri</th><th>Pratidin ₹</th><th>Kul Bhugtan ₹</th><th>Status</th><th>Credit Status</th><th>Credit Date</th><th>Comment</th><th>Action</th></tr></thead>
             <tbody id="demandTableBody"></tbody>
@@ -1096,7 +1116,7 @@ main{padding-bottom:12px!important}
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   }
 </script>
-<script src="app.js?v=51"></script>
+<script src="app.js?v=52"></script>
 <script>
 /* Agar app.js load hi na ho (404 / internet / purani cache) to Login button "dead" lagta hai —
    user ko saaf message dikhao ki asli problem kya hai */

@@ -533,7 +533,8 @@ function getPaymentLeft(p, paidMap){
 }
 // Mate Status: poora mil gaya ya Comment likha = ✅ Mila, baaki sab ⏳ Pending
 function paymentMateStatus(p, paidMap){
-  return getPaymentLeft(p, paidMap) <= 0 ? "mila" : "pending";
+  // v52: poora mila YA kuch Mila likha/tick kiya = ✅ Mila (baaki Khata me judta rahta hai)
+  return (getPaymentLeft(p, paidMap) <= 0 || getPaymentMila(p) > 0) ? "mila" : "pending";
 }
 
 function demandCommentStatus(d){ return "pending"; } // v45: comment ab sirf note hai
@@ -563,12 +564,14 @@ function computeLedgers(onlyLabourId){
     const left = Math.max(0, round2(mate - paid));
     add(p.labourId, { kind: "due", date: dueDate, amount: mate, order: 0, paymentId: p.id, paid, left,
       comment: "Payment ₹" + (Number(p.amount) || 0) + " (" + fmtDate(p.date) + ")",
-      status: left <= 0 ? "mila" : "pending" });
+      status: (left <= 0 || (dem && Number(dem.mila) > 0)) ? "mila" : "pending" });
     // v45: "Kitna Mila" (Demand par saved) -> Khata me Mila (credit) entry. Comment sirf note hai.
     const milaAmt = dem ? Math.min(Number(dem.mila) || 0, mate) : 0;
     if(milaAmt > 0){
+      const leftNow = Math.max(0, round2(mate - paid));
+      const note = dem.comment && String(dem.comment).trim() ? String(dem.comment).trim() : "";
       add(p.labourId, { kind: "mile", auto: true, paymentId: p.id, date: dem.milaDate || dueDate, amount: round2(milaAmt), order: 1,
-        comment: dem.comment && String(dem.comment).trim() ? String(dem.comment).trim() : "" });
+        comment: "Demand " + fmtDate(p.date) + ": diya ₹" + round2(milaAmt) + (leftNow > 0 ? ", baaki ₹" + leftNow : " (poora)") + (note ? " · " + note : "") });
     }
     const diya = Number(ac.diya) || 0;
     if(diya > 0){
@@ -3620,7 +3623,9 @@ function getReportRows(){
   DATA.payments.forEach(p => { payMap[p.date + "|" + p.labourId] = p; });
   DATA.acCredits.forEach(a => { acMap[a.date + "|" + a.labourId] = a; });
 
+  const q = ($("reportSearch") ? $("reportSearch").value : "").trim().toLowerCase();
   let demandList = date ? DATA.demands.filter(d => d.date === date) : DATA.demands.slice();
+  if(q) demandList = demandList.filter(d => { const l = labMap[d.labourId] || {}; return (String(l.name || "") + " " + String(l.jobcardNo || "")).toLowerCase().includes(q); });
   demandList.sort((a, b) => b.date.localeCompare(a.date));
 
   let rows = demandList.map(d => {
@@ -3678,15 +3683,16 @@ function generateReport(){
         <td class="nw">${i + 1}</td>
         <td>${escapeHtml(l.name || "—")}</td>
         <td>${escapeHtml(l.jobcardNo || "—")}</td>
+        <td class="nw">${fmtDate(d.date)}</td>
         <td class="nw">${d.kulDin ?? ""}</td>
         <td class="nw">${d.pratidin ?? ""}</td>
         <td class="nw">${p ? "₹" + p.amount : "—"}</td>
         <td class="nw">${p ? "₹" + r.mate.toFixed(2) : "—"}</td>
         <td class="nw">${r.credited && p
-          ? `<div style="display:flex;gap:3px;align-items:center"><input type="number" min="0" step="any" id="rmila-${p.id}" value="${getPaymentMila(p) || ""}" placeholder="${r.mate.toFixed(0)}" style="width:70px;font-size:12px;padding:4px 5px" onchange="setMilaFromInput('${p.id}', 'rmila-')"><button class="btn btn-green btn-sm" style="padding:3px 7px" title="Poora Mila" onclick="tickMila('${p.id}')">✅</button></div>${r.diya && r.diya !== getPaymentMila(p) ? `<div style="font-size:11px;color:var(--muted)">kul ₹${r.diya}</div>` : ""}`
+          ? `<div style="display:flex;gap:5px;align-items:center"><label title="Mila (tick = poora hissa, phir kam kar sakte ho)" style="display:flex;align-items:center;gap:3px;font-size:12px;font-weight:700;cursor:pointer"><input type="checkbox" class="mila-tick" ${getPaymentMila(p) > 0 ? "checked" : ""} onchange="tickMilaToggle('${p.id}', this.checked)"> Mila</label><input type="number" min="0" step="any" id="rmila-${p.id}" value="${getPaymentMila(p) || ""}" placeholder="${r.mate.toFixed(0)}" style="width:70px;font-size:12px;padding:4px 5px" onchange="setMilaFromInput('${p.id}', 'rmila-')"></div>${r.diya && r.diya !== getPaymentMila(p) ? `<div style="font-size:11px;color:var(--muted)">kul ₹${r.diya}</div>` : ""}`
           : "—"}</td>
         <td class="nw" style="font-weight:700;color:${r.baaki > 0 ? "#c0392b" : "#146c33"}">${r.credited ? (r.baaki > 0 ? "₹" + r.baaki.toFixed(2) : "✅") : "—"}</td>
-        <td class="nw">${r.mateStatus === "mila" ? `<span class="badge credited">✅ Mila</span>` : (r.mateStatus === "pending" ? `<span class="badge pending">⏳ Pending</span>` : "—")}</td>
+        <td class="nw">${r.mateStatus === "mila" ? `<span class="badge credited">✅ Mila</span>${r.baaki > 0 ? `<div style="font-size:11px;color:#c0392b;font-weight:700">baaki ₹${r.baaki.toFixed(0)}</div>` : ""}` : (r.mateStatus === "pending" ? `<span class="badge pending">⏳ Pending</span>` : "—")}</td>
         <td class="nw"><span class="badge ${r.acStatus === "Credited" ? "credited" : r.acStatus === "Pending" ? "pending" : ""}">${r.acStatus}</span></td>
         <td class="nw">${r.creditDate || "—"}</td>
         <td class="c-comment">
@@ -3699,7 +3705,9 @@ function generateReport(){
     `;
   });
 
+  const keepSel = reportSelectedIds();
   if(bodyBox) bodyBox.innerHTML = rowsHtml.join("");
+  if(keepSel.size) document.querySelectorAll(".rep-row-chk").forEach(c => { if(keepSel.has(c.value)) c.checked = true; });
   if(summaryBox){
     summaryBox.innerHTML = `
       <div class="sum-card"><div class="v">${rows.length}</div><div class="l">Total Records</div></div>
@@ -3743,6 +3751,7 @@ function getReportRowsData(){
   return getReportRows().filter(r => !selIds.size || (r.p && selIds.has(r.p.id))).map(r => ({
     name: r.l.name || "—",
     jobcardNo: r.l.jobcardNo || "—",
+    demandDate: fmtDate(r.d.date),
     kulDin: r.d.kulDin ?? "",
     pratidin: r.d.pratidin ?? "",
     amount: r.p ? "₹" + r.p.amount : "—",
@@ -3765,6 +3774,7 @@ function reportPrintDocHtml(pageRows, dateLabel, pageNum, totalPages, startIndex
       <td style="${cell};text-align:center;${nw}">${startIndex + i + 1}</td>
       <td style="${cell}">${escapeHtml(r.name)}</td>
       <td style="${cell};${nw}">${escapeHtml(r.jobcardNo)}</td>
+      <td style="${cell};text-align:center;${nw}">${escapeHtml(r.demandDate || "")}</td>
       <td style="${cell};text-align:center;${nw}">${escapeHtml(String(r.kulDin))}</td>
       <td style="${cell};text-align:center;${nw}">${escapeHtml(String(r.pratidin))}</td>
       <td style="${cell};text-align:center;${nw}">${escapeHtml(r.amount)}</td>
@@ -3785,6 +3795,7 @@ function reportPrintDocHtml(pageRows, dateLabel, pageNum, totalPages, startIndex
           <th style="${th};${nw}">#</th>
           <th style="${th}">Name</th>
           <th style="${th};${nw}">Jobcard No.</th>
+          <th style="${th};${nw}">Demand</th>
           <th style="${th};${nw}">Din</th>
           <th style="${th};${nw}">Dar ₹</th>
           <th style="${th};${nw}">Kul ₹</th>
@@ -4413,6 +4424,12 @@ function setMilaFromInput(paymentId, prefix){
   if(ok){ persist(); toast("Mila save ho gaya ✅", "success"); }
   refreshPaymentViews();
 }
+function tickMilaToggle(paymentId, on){
+  const p = DATA.payments.find(x => x.id === paymentId); if(!p) return;
+  if(on){ tickMila(paymentId); return; }
+  if(setMila(paymentId, 0)){ persist(); toast("Mila hata diya", "info"); }
+  refreshPaymentViews();
+}
 function tickMila(paymentId){
   const p = DATA.payments.find(x => x.id === paymentId); if(!p) return;
   const room = Math.max(0, round2(mateOf(p) - getPaymentOtherPaid(p)));
@@ -4481,7 +4498,6 @@ function syncRepSel(){
     tr.classList.toggle("rep-sel", !!(c && c.checked));
   });
 }
-function repScrollBy(dx){ const w = document.querySelector(".rep-scroll"); if(w) w.scrollBy({left: dx, behavior: "smooth"}); }
 document.addEventListener("change", e => { if(e.target && e.target.classList && e.target.classList.contains("rep-row-chk")) syncRepSel(); });
 document.addEventListener("click", e => {
   const td = e.target.closest && e.target.closest("#reportTableBody td");
@@ -4803,3 +4819,72 @@ function toggleGadbad(){
   b.classList.remove("hidden");
   const btn = $("gadbadBtn"); if(btn) btn.textContent = "🔍 Gadbad jaanch (" + l.length + ")";
 }
+
+
+/* ================================================================
+   v52: popup bahar-click se tabhi band ho jab dabana + chhodna dono bahar ho
+   (text select karke bahar chhodne par popup band ho jata tha)
+================================================================ */
+(function(){
+  let downT = null;
+  const down = e => { downT = e.target; };
+  document.addEventListener("mousedown", down, true);
+  document.addEventListener("touchstart", down, true);
+  document.addEventListener("click", e => {
+    const t = e.target;
+    if(t && t.classList && (t.classList.contains("modal-overlay-lg") || t.classList.contains("modal-overlay")) && downT && downT !== t){
+      e.stopImmediatePropagation(); e.preventDefault();
+    }
+    downT = null;
+  }, true);
+})();
+
+/* ================================================================
+   v52: Labour / AC Credit / Demand list — Report jaisi apni khidki,
+   atka hua naam + heading, ◀ ▶ buttons, chuni row poori highlight
+================================================================ */
+const XS_TABLES = [ ["labourTableBody", 4], ["acTableBody", 5], ["demandTableBody", 5] ];
+function xsApplySticky(tbodyId, nameIdx){
+  // sirf ☑ (pehla) aur Naam column atke — beech ke column slide ho jaate hain
+  const tb = $(tbodyId); if(!tb) return;
+  const table = tb.closest("table"); if(!table) return;
+  const ths = table.querySelectorAll("thead th");
+  if(!ths.length || !ths[0].offsetWidth) return;
+  const w0 = ths[0].getBoundingClientRect().width;
+  table.querySelectorAll("tr").forEach(tr => {
+    const head = tr.parentElement.tagName === "THEAD";
+    [[0, 0], [nameIdx - 1, w0]].forEach(([i, left]) => {
+      const c = tr.children[i]; if(!c) return;
+      c.style.position = "sticky"; c.style.left = left + "px"; c.style.zIndex = head ? 5 : 2;
+      c.classList.add("xs-st"); if(i === nameIdx - 1) c.classList.add("xs-st-last");
+    });
+  });
+}
+function xsSyncSel(tbodyId){
+  const tb = $(tbodyId); if(!tb) return;
+  tb.querySelectorAll("tr").forEach(tr => {
+    const c = tr.querySelector('input[type="checkbox"]');
+    tr.classList.toggle("rep-sel", !!(c && c.checked));
+  });
+}
+function xsRefreshAll(){ XS_TABLES.forEach(([id, n]) => { xsSyncSel(id); xsApplySticky(id, n); }); }
+function repScrollBy(dx, el){
+  const nav = el && el.closest ? el.closest(".rep-nav") : null;
+  const w = nav ? nav.nextElementSibling : document.querySelector(".rep-scroll");
+  if(w) w.scrollBy({left: dx, behavior: "smooth"});
+}
+(function(){
+  XS_TABLES.forEach(([id, n]) => {
+    const tb = $(id); if(!tb) return;
+    const wrap = tb.closest(".table-wrap"); if(wrap) wrap.classList.add("xs-scroll");
+    new MutationObserver(() => { clearTimeout(tb.__xt); tb.__xt = setTimeout(() => { xsSyncSel(id); xsApplySticky(id, n); }, 30); }).observe(tb, {childList: true});
+    tb.addEventListener("click", e => {
+      if(e.target.closest("input,button,select,textarea,a,label")) return;
+      const tr = e.target.closest("tr"); const c = tr && tr.querySelector('input[type="checkbox"]');
+      if(c && !c.disabled){ c.checked = !c.checked; c.dispatchEvent(new Event("change", {bubbles: true})); xsSyncSel(id); }
+    });
+  });
+  document.addEventListener("change", e => { if(e.target && e.target.type === "checkbox" && e.target.closest(".xs-scroll")) XS_TABLES.forEach(([id]) => xsSyncSel(id)); });
+  window.addEventListener("resize", () => { clearTimeout(window.__xr); window.__xr = setTimeout(xsRefreshAll, 150); });
+  document.addEventListener("click", e => { if(e.target.closest && e.target.closest("[onclick*='Modal'],[onclick*='acTab'],[onclick*='labTab'],[onclick*='demTab']")) setTimeout(xsRefreshAll, 120); }, true);
+})();
