@@ -498,8 +498,8 @@ function renderAll(){
    (kuch alag se store nahi hota, isliye khata hamesha sahi rehta hai):
      1) "due"  — AC Credited Payment ka Mate Share (50%) = Labour se lena baaki
      2) "mile" — AC Credit / Report tab ke "Diya" column me bhari rakam (Labour ne aapko di)
-     3) manual — DATA.ledger me 🟢 Aapko Mile / 🔴 Aapne Diye (khata screen se)
-   Balance = due + Aapne Diye − Aapko Mile.   Plus = Aapko Milenge, Minus = Aap Denge.
+     3) manual — DATA.ledger me MILA / DIYA (khata screen se)
+   Balance = due + Diya − Mila.   Plus 🟢 = Labour se lena baaki, Minus 🔴 = Labour ko dena (usne zyada de diya).
    Mate Share "Mila / Pending" ka nishan Demand ke COMMENT se aata hai:
    Comment khaali = ⏳ Pending, kuch likha ho = ✅ Mila. Comment sirf 📊 Report tab me edit hota hai.
 ================================================================ */
@@ -596,7 +596,7 @@ function computeLedgers(onlyLabourId){
     rows.forEach(r => {
       if(r.kind === "due"){ bal += r.amount; kulAaya += r.amount; }
       else if(r.kind === "mile"){ bal -= r.amount; kulMila += r.amount; }
-      else { bal -= r.amount; kulDiye += r.amount; } // advance: pehle diya hua, baaki se kat'ta hai
+      else { bal += r.amount; kulDiye += r.amount; } // v53: "Diya" (aapne labour ko diya) = baaki me JUDTA hai
       bal = round2(bal);
       r.balanceAfter = bal;
     });
@@ -700,9 +700,9 @@ function renderKhataListInto(elId, term){
   box.innerHTML = list.map(l => {
     const lg = all[l.id] || EMPTY_LEDGER;
     const bal = lg.balance;
-    const cls = bal > 0 ? "credited" : (bal < 0 ? "pending" : "inactive");
+    const cls = bal > 0 ? "credited" : (bal < 0 ? "negative" : "inactive");
     const balTxt = "₹" + Math.abs(bal).toFixed(2);
-    const sub = bal === 0 ? "Barabar" : (bal > 0 ? "Baaki" : "Zyada Diya");
+    const sub = bal === 0 ? "Barabar" : (bal > 0 ? "Lena baaki" : "Labour ko dena");
     const ms = msMap[l.id] || { mila: 0, pending: 0 };
     const msBadge = ms.pending > 0
       ? `<span class="badge pending">⏳ ${ms.pending} Pending</span>`
@@ -883,14 +883,14 @@ function renderLedgerModal(){
   const bal = lg.balance;
   const rows = lg.rows.slice().reverse(); // naya upar
   const waitN = lg.waiting.length;
-  const balColor = bal > 0 ? "#c0392b" : (bal < 0 ? "#146c33" : "#555");
+  const balColor = bal > 0 ? "#146c33" : (bal < 0 ? "#c0392b" : "#555");
   const money = n => "₹" + Math.abs(n).toFixed(2);
 
   let formHtml = "";
   if(ledgerEntryMode){
     formHtml = `
     <div class="lg-form ${ledgerEntryMode === "mile" ? "mile" : "diye"}">
-      <div class="lg-form-title">${ledgerEntryMode === "mile" ? escapeHtml(l.name) + " se mila" : escapeHtml(l.name) + " ko advance diya"}</div>
+      <div class="lg-form-title">${ledgerEntryMode === "mile" ? escapeHtml(l.name) + " se mila" : escapeHtml(l.name) + " ko diya"}</div>
       <div class="row">
         <div class="field grow"><label>Amount ₹</label><input type="number" id="ledgerEntryAmount" min="0" step="any" placeholder="0"></div>
         <div class="field grow"><label>Date</label><input type="date" id="ledgerEntryDate" value="${todayISO()}"></div>
@@ -932,7 +932,7 @@ function renderLedgerModal(){
       <button class="btn btn-outline btn-sm" onclick="openACPending('${l.id}')" title="Sarkar ne abhi Credit nahi kiye">⏳${waitN ? ` <b>${waitN}</b>` : ""}</button>
     </div>
     <div class="lg-balcard" style="margin-top:8px">
-      <div><div style="font-size:12px;color:var(--muted)">${bal < 0 ? "Zyada Diya (−)" : "Baaki"}</div><div class="lg-bal" style="color:${balColor}">${money(bal)}</div></div>
+      <div><div style="font-size:12px;color:var(--muted)">${bal < 0 ? "Labour ko dena (−)" : "Baaki"}</div><div class="lg-bal" style="color:${balColor}">${money(bal)}</div></div>
     </div>
     <div class="row" style="margin:8px 0">
       <button class="btn btn-orange btn-sm" onclick="downloadLabourKhataPDF('${l.id}')">📄 PDF</button>
@@ -941,13 +941,13 @@ function renderLedgerModal(){
     </div>
     ${ledgerProfileOpen ? ledgerProfileHtml(l.id) : ""}
     ${formHtml}${editHtml}
-    <div class="lg-cols"><span>ENTRIES</span><span>BAAKI JUDA</span><span>MILA</span></div>
+    <div class="lg-cols"><span>ENTRIES</span><span>BAAKI / DIYA</span><span>MILA</span></div>
     <div id="ledgerRows">
       ${rows.length ? rows.map(r => {
         const editKey = r.manual ? "L:" + r.id : (r.legacy ? "A:" + r.paymentId : (r.auto ? "M:" + r.paymentId : ""));
         const tag = "";
         const clickAttr = editKey ? `onclick="openLedgerEdit('${editKey}')" style="cursor:pointer" title="Badalne ke liye tap karein"` : "";
-        const label = r.kind === "adv" ? "Advance" : (r.kind === "mile" ? "Mila" : "");
+        const label = r.kind === "adv" ? "Diya" : (r.kind === "mile" ? "Mila" : "");
         return `
         <div class="lg-row" ${clickAttr}>
           <div class="lg-main">
@@ -955,14 +955,14 @@ function renderLedgerModal(){
             <span class="lg-chip">Bal. ${r.balanceAfter < 0 ? "−" : ""}₹${Math.abs(r.balanceAfter).toFixed(2)}</span>
             <div class="lg-note">${label ? escapeHtml(label) + (r.comment ? " — " : "") : ""}${r.comment ? escapeHtml(r.comment) : ""}${editKey ? ' <span style="font-size:11px;color:var(--muted)">✏️</span>' : ""}</div>
           </div>
-          <div class="lg-amt diye">${r.kind === "due" ? "₹" + r.amount.toFixed(2) : ""}</div>
-          <div class="lg-amt mile">${r.kind !== "due" ? "₹" + r.amount.toFixed(2) : ""}</div>
+          <div class="lg-amt diye">${r.kind !== "mile" ? "₹" + r.amount.toFixed(2) : ""}</div>
+          <div class="lg-amt mile">${r.kind === "mile" ? "₹" + r.amount.toFixed(2) : ""}</div>
         </div>`;
       }).join("") : `<div class="empty">Abhi koi entry nahi — Payment Credit hote hi uska hissa yahan chadh jayega.</div>`}
     </div>
     ${(ledgerEntryMode || et) ? "" : `
     <div class="lg-footer">
-      <button class="lg-btn diye" onclick="openLedgerEntryForm('adv')">ADVANCE DIYA ₹</button>
+      <button class="lg-btn diye" onclick="openLedgerEntryForm('adv')">DIYA ₹</button>
       <button class="lg-btn mile" onclick="openLedgerEntryForm('mile')">MILA ₹</button>
     </div>`}
   `;
@@ -3687,6 +3687,7 @@ function generateReport(){
         <td class="nw">${d.kulDin ?? ""}</td>
         <td class="nw">${d.pratidin ?? ""}</td>
         <td class="nw">${p ? "₹" + p.amount : "—"}</td>
+        <td class="nw">${p ? "₹" + (p.amount * 0.5).toFixed(2) : "—"}</td>
         <td class="nw">${p ? "₹" + r.mate.toFixed(2) : "—"}</td>
         <td class="nw">${r.credited && p
           ? `<div style="display:flex;gap:5px;align-items:center"><label title="Mila (tick = poora hissa, phir kam kar sakte ho)" style="display:flex;align-items:center;gap:3px;font-size:12px;font-weight:700;cursor:pointer"><input type="checkbox" class="mila-tick" ${getPaymentMila(p) > 0 ? "checked" : ""} onchange="tickMilaToggle('${p.id}', this.checked)"> Mila</label><input type="number" min="0" step="any" id="rmila-${p.id}" value="${getPaymentMila(p) || ""}" placeholder="${r.mate.toFixed(0)}" style="width:70px;font-size:12px;padding:4px 5px" onchange="setMilaFromInput('${p.id}', 'rmila-')"></div>${r.diya && r.diya !== getPaymentMila(p) ? `<div style="font-size:11px;color:var(--muted)">kul ₹${r.diya}</div>` : ""}`
@@ -3755,6 +3756,7 @@ function getReportRowsData(){
     kulDin: r.d.kulDin ?? "",
     pratidin: r.d.pratidin ?? "",
     amount: r.p ? "₹" + r.p.amount : "—",
+    labour: r.p ? (r.p.amount * 0.5).toFixed(2) : "—",
     mate: r.p ? r.mate.toFixed(2) : "—",
     diya: r.credited ? (r.diya ? r.diya.toFixed(2) : "0") : "—",
     baaki: r.credited ? (r.baaki > 0 ? r.baaki.toFixed(2) : "0") : "—",
@@ -3778,6 +3780,7 @@ function reportPrintDocHtml(pageRows, dateLabel, pageNum, totalPages, startIndex
       <td style="${cell};text-align:center;${nw}">${escapeHtml(String(r.kulDin))}</td>
       <td style="${cell};text-align:center;${nw}">${escapeHtml(String(r.pratidin))}</td>
       <td style="${cell};text-align:center;${nw}">${escapeHtml(r.amount)}</td>
+      <td style="${cell};text-align:center;${nw}">${escapeHtml(r.labour || "")}</td>
       <td style="${cell};text-align:center;${nw}">${escapeHtml(r.mate)}</td>
       <td style="${cell};text-align:center;${nw}">${escapeHtml(r.diya)}</td>
       <td style="${cell};text-align:center;font-weight:700;${nw}">${escapeHtml(r.baaki)}</td>
@@ -3799,6 +3802,7 @@ function reportPrintDocHtml(pageRows, dateLabel, pageNum, totalPages, startIndex
           <th style="${th};${nw}">Din</th>
           <th style="${th};${nw}">Dar ₹</th>
           <th style="${th};${nw}">Kul ₹</th>
+          <th style="${th};${nw}">Labour ₹</th>
           <th style="${th};${nw}">Mate ₹</th>
           <th style="${th};${nw}">Diya ₹</th>
           <th style="${th};${nw}">Baaki ₹</th>
@@ -4639,7 +4643,6 @@ function renderTodayBar(){
   const ms = computeMateStatusMap();
   let mb = 0; Object.keys(ms).forEach(k => { mb += ms[k].pending; });
   let h = "";
-  if(cr) h += `<button onclick="openACPending(null)">🏦 ${cr} Credit baaki</button>`;
   if(mb) h += `<button onclick="showMilaBaaki()">💰 ${mb} ka Mila baaki</button>`;
   if(!cr && !mb && DATA.payments.length) h += `<button class="ok" style="cursor:default">✅ Sab hisaab barabar</button>`;
   let last = 0; try{ last = Number(localStorage.getItem("lj_lastBackup")) || 0; }catch(e){}

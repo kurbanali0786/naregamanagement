@@ -116,6 +116,7 @@ tr:hover td{background:#f5faf7}
 .badge.completed{background:#dbeafe;color:#1d4ed8}
 .badge.pending{background:#fdeed7;color:#b05e0d}
 .badge.credited{background:#d5f2df;color:#146c33}
+.badge.negative{background:#fbdcdc;color:#c0392b}
 .empty{text-align:center;color:var(--muted);padding:26px;font-size:13.5px;background:#fafbfa;border:1.5px dashed var(--border);border-radius:10px;margin-top:10px}
 .chk-list{max-height:320px;overflow-y:auto;border:1.5px solid var(--border);border-radius:12px;margin-top:10px;background:#fcfdfc}
 .chk-item{display:flex;align-items:center;gap:10px;padding:11px 13px;border-bottom:1px solid #e8eee9;font-size:13.5px;transition:background .12s}
@@ -655,7 +656,7 @@ main{padding-bottom:12px!important}
         <div class="rep-nav no-print"><button class="btn btn-gray btn-sm" onclick="repScrollBy(-320)">◀ Left</button><button class="btn btn-gray btn-sm" onclick="repScrollBy(320)">Right ▶</button><span>Row par dabao = select ✔ (poori row highlight)</span></div>
         <div class="table-wrap mt rep-scroll">
           <table class="report-table">
-            <thead><tr><th class="nw no-print"><input type="checkbox" onchange="toggleRepSelectAll(this.checked)"></th><th class="nw">#</th><th>Name</th><th>Jobcard No.</th><th class="nw">Demand Date</th><th class="nw">Kul Divas</th><th class="nw">Pratidin ₹</th><th class="nw">Kul Bhugtan ₹</th><th class="nw">Mate ₹</th><th class="nw">Kitna Mila ₹</th><th class="nw">Baaki ₹</th><th class="nw">Mate Status</th><th class="nw">AC Status</th><th class="nw">Credit</th><th class="c-comment">Comment</th></tr></thead>
+            <thead><tr><th class="nw no-print"><input type="checkbox" onchange="toggleRepSelectAll(this.checked)"></th><th class="nw">#</th><th>Name</th><th>Jobcard No.</th><th class="nw">Demand Date</th><th class="nw">Kul Divas</th><th class="nw">Pratidin ₹</th><th class="nw">Kul Bhugtan ₹</th><th class="nw">Labour ₹</th><th class="nw">Mate ₹</th><th class="nw">Kitna Mila ₹</th><th class="nw">Baaki ₹</th><th class="nw">Mate Status</th><th class="nw">AC Status</th><th class="nw">Credit</th><th class="c-comment">Comment</th></tr></thead>
             <tbody id="reportTableBody"></tbody>
           </table>
         </div>
@@ -1116,7 +1117,7 @@ main{padding-bottom:12px!important}
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   }
 </script>
-<script src="app.js?v=52"></script>
+<script src="app.js?v=53"></script>
 <script>
 /* Agar app.js load hi na ho (404 / internet / purani cache) to Login button "dead" lagta hai —
    user ko saaf message dikhao ki asli problem kya hai */
